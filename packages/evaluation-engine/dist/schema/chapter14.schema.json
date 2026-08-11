@@ -1,0 +1,292 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://codeforge.dev/schemas/chapter14.schema.json",
+    "title": "Chapter14EvaluationContext",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "requirements",
+        "criteria",
+        "evidence_requirements",
+        "observed_evidence",
+        "artifacts",
+        "baselines",
+        "traceability_links"
+    ],
+    "properties": {
+        "requirements": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/Requirement" }
+        },
+        "criteria": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/Criterion" }
+        },
+        "evidence_requirements": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/EvidenceRequirement" }
+        },
+        "observed_evidence": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/ObservedEvidence" }
+        },
+        "artifacts": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/ArtifactReference" }
+        },
+        "baselines": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/Baseline" }
+        },
+        "traceability_links": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/TraceabilityLink" }
+        }
+    },
+    "definitions": {
+        "ConstraintLevel": {
+            "type": "string",
+            "enum": ["Foundational", "Standard"]
+        },
+        "EvidenceClass": {
+            "type": "string",
+            "enum": [
+                "Structural",
+                "Dependency",
+                "Interface",
+                "Configuration",
+                "Baseline",
+                "Traceability",
+                "ExecutionTrace"
+            ]
+        },
+        "TraceabilityEntityKind": {
+            "type": "string",
+            "enum": [
+                "Requirement",
+                "Criterion",
+                "EvidenceRequirement",
+                "ObservedEvidence",
+                "Artifact",
+                "Baseline"
+            ]
+        },
+        "JsonValue": {
+            "oneOf": [
+                { "type": "string" },
+                { "type": "number" },
+                { "type": "boolean" },
+                { "type": "null" },
+                { "type": "array", "items": { "$ref": "#/definitions/JsonValue" } },
+                {
+                    "type": "object",
+                    "additionalProperties": { "$ref": "#/definitions/JsonValue" }
+                }
+            ]
+        },
+        "Requirement": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["requirement_id", "title", "constraint_level"],
+            "properties": {
+                "requirement_id": { "type": "string", "minLength": 1 },
+                "title": { "type": "string", "minLength": 1 },
+                "description": { "type": "string" },
+                "constraint_level": { "$ref": "#/definitions/ConstraintLevel" }
+            }
+        },
+        "ApplicabilityScope": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "artifact_ids": {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 }
+                },
+                "artifact_tags": {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 }
+                }
+            }
+        },
+        "StructuredPredicate": {
+            "type": "object",
+            "required": ["type", "evidence_class", "attribute"],
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": ["ATTRIBUTE_EXISTS", "ATTRIBUTE_EQUALS", "ATTRIBUTE_NOT_EQUALS"]
+                },
+                "evidence_class": { "$ref": "#/definitions/EvidenceClass" },
+                "attribute": { "type": "string", "minLength": 1 },
+                "expected": { "$ref": "#/definitions/JsonValue" }
+            },
+            "allOf": [
+                {
+                    "if": {
+                        "properties": { "type": { "const": "ATTRIBUTE_EXISTS" } }
+                    },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["type", "evidence_class", "attribute"],
+                        "not": { "required": ["expected"] },
+                        "properties": {
+                            "type": true,
+                            "evidence_class": true,
+                            "attribute": true
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": { "type": { "const": "ATTRIBUTE_EQUALS" } }
+                    },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["type", "evidence_class", "attribute", "expected"],
+                        "properties": {
+                            "type": true,
+                            "evidence_class": true,
+                            "attribute": true,
+                            "expected": true
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": { "type": { "const": "ATTRIBUTE_NOT_EQUALS" } }
+                    },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["type", "evidence_class", "attribute", "expected"],
+                        "properties": {
+                            "type": true,
+                            "evidence_class": true,
+                            "attribute": true,
+                            "expected": true
+                        }
+                    }
+                }
+            ]
+        },
+        "StructuredSufficiencyCondition": {
+            "type": "object",
+            "required": ["type", "evidence_class"],
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": ["CONTAIN_ATTRIBUTE", "CONTAIN_KEY", "MIN_COUNT"]
+                },
+                "evidence_class": { "$ref": "#/definitions/EvidenceClass" },
+                "attribute": { "type": "string", "minLength": 1 },
+                "key": { "type": "string", "minLength": 1 },
+                "min_count": { "type": "integer", "minimum": 0 }
+            },
+            "allOf": [
+                {
+                    "if": { "properties": { "type": { "const": "CONTAIN_ATTRIBUTE" } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["type", "evidence_class", "attribute"],
+                        "properties": { "type": true, "evidence_class": true, "attribute": true }
+                    }
+                },
+                {
+                    "if": { "properties": { "type": { "const": "CONTAIN_KEY" } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["type", "evidence_class", "key"],
+                        "properties": { "type": true, "evidence_class": true, "key": true }
+                    }
+                },
+                {
+                    "if": { "properties": { "type": { "const": "MIN_COUNT" } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["type", "evidence_class", "min_count"],
+                        "properties": { "type": true, "evidence_class": true, "min_count": true }
+                    }
+                }
+            ]
+        },
+        "Criterion": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["criterion_id", "requirement_id", "definition"],
+            "properties": {
+                "criterion_id": { "type": "string", "minLength": 1 },
+                "requirement_id": { "type": "string", "minLength": 1 },
+                "definition": { "type": "string", "minLength": 1 },
+                "structured_predicate": { "$ref": "#/definitions/StructuredPredicate" },
+                "applicability": { "$ref": "#/definitions/ApplicabilityScope" }
+            }
+        },
+        "EvidenceRequirement": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "evidence_requirement_id",
+                "criterion_id",
+                "evidence_class",
+                "sufficiency_conditions"
+            ],
+            "properties": {
+                "evidence_requirement_id": { "type": "string", "minLength": 1 },
+                "criterion_id": { "type": "string", "minLength": 1 },
+                "evidence_class": { "$ref": "#/definitions/EvidenceClass" },
+                "sufficiency_conditions": {
+                    "type": "array",
+                    "items": { "$ref": "#/definitions/StructuredSufficiencyCondition" }
+                }
+            }
+        },
+        "ArtifactReference": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["artifact_id", "artifact_type"],
+            "properties": {
+                "artifact_id": { "type": "string", "minLength": 1 },
+                "artifact_type": { "type": "string", "minLength": 1 },
+                "tags": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                "baseline_id": { "type": "string", "minLength": 1 }
+            }
+        },
+        "ObservedEvidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["evidence_id", "artifact_id", "evidence_class", "payload"],
+            "properties": {
+                "evidence_id": { "type": "string", "minLength": 1 },
+                "artifact_id": { "type": "string", "minLength": 1 },
+                "evidence_class": { "$ref": "#/definitions/EvidenceClass" },
+                "payload": { "$ref": "#/definitions/JsonValue" },
+                "integrity_identifier": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                }
+            }
+        },
+        "Baseline": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["baseline_id"],
+            "properties": {
+                "baseline_id": { "type": "string", "minLength": 1 },
+                "description": { "type": "string" }
+            }
+        },
+        "TraceabilityLink": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["link_id", "source_id", "source_kind", "target_id", "target_kind", "relation"],
+            "properties": {
+                "link_id": { "type": "string", "minLength": 1 },
+                "source_id": { "type": "string", "minLength": 1 },
+                "source_kind": { "$ref": "#/definitions/TraceabilityEntityKind" },
+                "target_id": { "type": "string", "minLength": 1 },
+                "target_kind": { "$ref": "#/definitions/TraceabilityEntityKind" },
+                "relation": { "type": "string", "minLength": 1 }
+            }
+        }
+    }
+}
