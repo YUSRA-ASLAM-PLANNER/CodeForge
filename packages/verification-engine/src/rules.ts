@@ -128,3 +128,57 @@ export const duplicateFileNodesRule: VerificationRule = {
     return violations;
   }
 };
+export const duplicateNodeIdsRule: VerificationRule = {
+  id: "ARCH-005",
+  description:
+    "Every context graph node must have a unique node ID",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const seen = new Set<string>();
+    const violations: VerificationViolation[] = [];
+
+    for (const node of context.graph.nodes) {
+      if (seen.has(node.id)) {
+        violations.push({
+          ruleId: "ARCH-005",
+          severity: "error",
+          message: `Duplicate context graph node ID: ${node.id}`,
+          target: node.id
+        });
+      } else {
+        seen.add(node.id);
+      }
+    }
+
+    return violations;
+  }
+};
+
+export const fileNodesRequireValidPathsRule: VerificationRule = {
+  id: "ARCH-006",
+  description:
+    "Every file node in the context graph must have a non-empty path",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const violations: VerificationViolation[] = [];
+
+    for (const node of context.graph.nodes) {
+      if (node.kind !== "file") {
+        continue;
+      }
+
+      if (!node.path || node.path.trim().length === 0) {
+        violations.push({
+          ruleId: "ARCH-006",
+          severity: "error",
+          message: `File node has missing or empty path: ${node.id}`,
+          target: node.id
+        });
+      }
+    }
+
+    return violations;
+  }
+};

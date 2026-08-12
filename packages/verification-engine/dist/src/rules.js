@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -94,6 +94,51 @@ exports.duplicateFileNodesRule = {
             }
             else {
                 seen.add(node.path);
+            }
+        }
+        return violations;
+    }
+};
+exports.duplicateNodeIdsRule = {
+    id: "ARCH-005",
+    description: "Every context graph node must have a unique node ID",
+    severity: "error",
+    check: (context) => {
+        const seen = new Set();
+        const violations = [];
+        for (const node of context.graph.nodes) {
+            if (seen.has(node.id)) {
+                violations.push({
+                    ruleId: "ARCH-005",
+                    severity: "error",
+                    message: `Duplicate context graph node ID: ${node.id}`,
+                    target: node.id
+                });
+            }
+            else {
+                seen.add(node.id);
+            }
+        }
+        return violations;
+    }
+};
+exports.fileNodesRequireValidPathsRule = {
+    id: "ARCH-006",
+    description: "Every file node in the context graph must have a non-empty path",
+    severity: "error",
+    check: (context) => {
+        const violations = [];
+        for (const node of context.graph.nodes) {
+            if (node.kind !== "file") {
+                continue;
+            }
+            if (!node.path || node.path.trim().length === 0) {
+                violations.push({
+                    ruleId: "ARCH-006",
+                    severity: "error",
+                    message: `File node has missing or empty path: ${node.id}`,
+                    target: node.id
+                });
             }
         }
         return violations;
