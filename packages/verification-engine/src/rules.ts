@@ -97,3 +97,34 @@ export const contextGraphFilesExistInRepositoryRule: VerificationRule = {
     return violations;
   }
 };
+
+export const duplicateFileNodesRule: VerificationRule = {
+  id: "ARCH-004",
+  description:
+    "Every repository file must have at most one corresponding file node",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const seen = new Set<string>();
+    const violations: VerificationViolation[] = [];
+
+    for (const node of context.graph.nodes) {
+      if (node.kind !== "file" || !node.path) {
+        continue;
+      }
+
+      if (seen.has(node.path)) {
+        violations.push({
+          ruleId: "ARCH-004",
+          severity: "error",
+          message: `Duplicate context graph file node: ${node.path}`,
+          target: node.path
+        });
+      } else {
+        seen.add(node.path);
+      }
+    }
+
+    return violations;
+  }
+};

@@ -2,7 +2,8 @@ import { VerificationEngine } from "./engine";
 import {
   contextGraphReferentialIntegrityRule,
   indexedFilesExistInContextGraphRule,
-  contextGraphFilesExistInRepositoryRule
+  contextGraphFilesExistInRepositoryRule,
+  duplicateFileNodesRule
 } from "./rules";
 import type { VerificationResult } from "./models";
 import type { RepositorySnapshot } from "@codeforge/repository-indexer";
@@ -17,6 +18,7 @@ export function verifyRepository(
   engine.addRule(contextGraphReferentialIntegrityRule);
   engine.addRule(indexedFilesExistInContextGraphRule);
   engine.addRule(contextGraphFilesExistInRepositoryRule);
+  engine.addRule(duplicateFileNodesRule);
 
   return engine.verify({
     files: repository.files.map((file) => file.path),

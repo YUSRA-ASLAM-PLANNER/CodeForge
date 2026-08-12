@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -68,6 +68,32 @@ exports.contextGraphFilesExistInRepositoryRule = {
                     message: `Context graph file is missing from repository index: ${node.path}`,
                     target: node.path
                 });
+            }
+        }
+        return violations;
+    }
+};
+exports.duplicateFileNodesRule = {
+    id: "ARCH-004",
+    description: "Every repository file must have at most one corresponding file node",
+    severity: "error",
+    check: (context) => {
+        const seen = new Set();
+        const violations = [];
+        for (const node of context.graph.nodes) {
+            if (node.kind !== "file" || !node.path) {
+                continue;
+            }
+            if (seen.has(node.path)) {
+                violations.push({
+                    ruleId: "ARCH-004",
+                    severity: "error",
+                    message: `Duplicate context graph file node: ${node.path}`,
+                    target: node.path
+                });
+            }
+            else {
+                seen.add(node.path);
             }
         }
         return violations;
