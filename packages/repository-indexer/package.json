@@ -2,6 +2,8 @@
   "name": "@codeforge/repository-indexer",
   "version": "0.1.0",
   "private": true,
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build"
