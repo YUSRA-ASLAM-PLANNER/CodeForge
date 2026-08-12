@@ -18,3 +18,4 @@ __exportStar(require("./models"), exports);
 __exportStar(require("./engine"), exports);
 __exportStar(require("./rules"), exports);
 __exportStar(require("./pipeline"), exports);
+__exportStar(require("./repositoryVerification"), exports);

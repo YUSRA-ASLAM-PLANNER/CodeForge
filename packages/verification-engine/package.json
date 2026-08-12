@@ -4,12 +4,11 @@
   "private": true,
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
+  "bin": {
+    "forge": "dist/src/cli.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build"
-  },
-  "dependencies": {
-    "@codeforge/context-graph": "0.1.0",
-    "@codeforge/repository-indexer": "0.1.0"
   }
 }
