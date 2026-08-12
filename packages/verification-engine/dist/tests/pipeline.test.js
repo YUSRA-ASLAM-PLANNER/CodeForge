@@ -8,19 +8,28 @@ const strict_1 = __importDefault(require("node:assert/strict"));
 const pipeline_1 = require("../src/pipeline");
 (0, node_test_1.default)("repository verification pipeline detects graph violations", () => {
     const result = (0, pipeline_1.verifyRepository)({
-        files: ["src/index.ts"]
+        rootPath: ".",
+        files: [
+            {
+                path: "src/index.ts",
+                extension: ".ts",
+                sizeBytes: 100
+            }
+        ],
+        fileCount: 1,
+        totalBytes: 100
     }, {
         nodes: [
             {
-                id: "file:index.ts",
+                id: "file:src/index.ts",
                 kind: "file",
-                label: "index.ts",
+                label: "src/index.ts",
                 path: "src/index.ts"
             }
         ],
         edges: [
             {
-                from: "file:index.ts",
+                from: "file:src/index.ts",
                 to: "file:missing.ts",
                 kind: "imports"
             }

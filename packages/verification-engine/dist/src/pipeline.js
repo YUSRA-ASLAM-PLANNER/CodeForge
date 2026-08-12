@@ -7,7 +7,7 @@ function verifyRepository(repository, graph) {
     const engine = new engine_1.VerificationEngine();
     engine.addRule(rules_1.contextGraphReferentialIntegrityRule);
     return engine.verify({
-        files: repository.files,
+        files: repository.files.map((file) => file.path),
         graph
     });
 }
