@@ -8,7 +8,7 @@ export function buildContextGraph(
   const graph = new ContextGraphBuilder();
 
   graph.addNode(
-    "repository",
+    "repository:root",
     "repository",
     "CodeForge"
   );
@@ -24,7 +24,7 @@ export function buildContextGraph(
     );
 
     graph.addEdge(
-      "repository",
+      "repository:root",
       id,
       "contains"
     );

@@ -7,3 +7,4 @@ export declare const duplicateNodeIdsRule: VerificationRule;
 export declare const fileNodesRequireValidPathsRule: VerificationRule;
 export declare const validContextGraphEdgeKindsRule: VerificationRule;
 export declare const repositoryNodeRequiredRule: VerificationRule;
+export declare const repositoryNodeIdRule: VerificationRule;

@@ -5,11 +5,11 @@ exports.buildContextGraphFromSnapshot = buildContextGraphFromSnapshot;
 const builder_1 = require("./builder");
 function buildContextGraph(files) {
     const graph = new builder_1.ContextGraphBuilder();
-    graph.addNode("repository", "repository", "CodeForge");
+    graph.addNode("repository:root", "repository", "CodeForge");
     for (const file of files) {
         const id = `file:${file.path}`;
         graph.addNode(id, "file", file.path, file.path);
-        graph.addEdge("repository", id, "contains");
+        graph.addEdge("repository:root", id, "contains");
     }
     return graph.build();
 }

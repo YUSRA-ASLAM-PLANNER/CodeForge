@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -188,5 +188,25 @@ exports.repositoryNodeRequiredRule = {
                 target: "repository"
             }
         ];
+    }
+};
+exports.repositoryNodeIdRule = {
+    id: "ARCH-009",
+    description: "The repository node must use the canonical ID repository:root",
+    severity: "error",
+    check: (context) => {
+        const repositoryNodes = context.graph.nodes.filter((node) => node.kind === "repository");
+        const violations = [];
+        for (const node of repositoryNodes) {
+            if (node.id !== "repository:root") {
+                violations.push({
+                    ruleId: "ARCH-009",
+                    severity: "error",
+                    message: `Repository node has invalid ID: ${node.id}`,
+                    target: node.id
+                });
+            }
+        }
+        return violations;
     }
 };

@@ -241,3 +241,30 @@ export const repositoryNodeRequiredRule: VerificationRule = {
     ];
   }
 };
+export const repositoryNodeIdRule: VerificationRule = {
+  id: "ARCH-009",
+  description:
+    "The repository node must use the canonical ID repository:root",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const repositoryNodes = context.graph.nodes.filter(
+      (node) => node.kind === "repository"
+    );
+
+    const violations: VerificationViolation[] = [];
+
+    for (const node of repositoryNodes) {
+      if (node.id !== "repository:root") {
+        violations.push({
+          ruleId: "ARCH-009",
+          severity: "error",
+          message: `Repository node has invalid ID: ${node.id}`,
+          target: node.id
+        });
+      }
+    }
+
+    return violations;
+  }
+};
