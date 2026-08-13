@@ -19,6 +19,11 @@ test("repository verification pipeline detects graph violations", () => {
     {
       nodes: [
         {
+          id: "repository:root",
+          kind: "repository",
+          label: "CodeForge"
+        },
+        {
           id: "file:src/index.ts",
           kind: "file",
           label: "src/index.ts",

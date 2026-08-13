@@ -5,3 +5,5 @@ export declare const contextGraphFilesExistInRepositoryRule: VerificationRule;
 export declare const duplicateFileNodesRule: VerificationRule;
 export declare const duplicateNodeIdsRule: VerificationRule;
 export declare const fileNodesRequireValidPathsRule: VerificationRule;
+export declare const validContextGraphEdgeKindsRule: VerificationRule;
+export declare const repositoryNodeRequiredRule: VerificationRule;

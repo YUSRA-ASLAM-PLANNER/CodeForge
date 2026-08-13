@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -142,5 +142,51 @@ exports.fileNodesRequireValidPathsRule = {
             }
         }
         return violations;
+    }
+};
+exports.validContextGraphEdgeKindsRule = {
+    id: "ARCH-007",
+    description: "Every context graph edge must use a supported edge kind",
+    severity: "error",
+    check: (context) => {
+        const validKinds = new Set([
+            "contains",
+            "imports",
+            "exports",
+            "references"
+        ]);
+        const violations = [];
+        for (const edge of context.graph.edges) {
+            if (!validKinds.has(edge.kind)) {
+                violations.push({
+                    ruleId: "ARCH-007",
+                    severity: "error",
+                    message: `Unsupported context graph edge kind: ${edge.kind}`,
+                    target: edge.kind
+                });
+            }
+        }
+        return violations;
+    }
+};
+exports.repositoryNodeRequiredRule = {
+    id: "ARCH-008",
+    description: "The context graph must contain exactly one repository node",
+    severity: "error",
+    check: (context) => {
+        const repositoryNodes = context.graph.nodes.filter((node) => node.kind === "repository");
+        if (repositoryNodes.length === 1) {
+            return [];
+        }
+        return [
+            {
+                ruleId: "ARCH-007",
+                severity: "error",
+                message: repositoryNodes.length === 0
+                    ? "Context graph is missing the repository node"
+                    : `Context graph contains multiple repository nodes: ${repositoryNodes.length}`,
+                target: "repository"
+            }
+        ];
     }
 };

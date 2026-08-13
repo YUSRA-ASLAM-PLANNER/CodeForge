@@ -21,6 +21,11 @@ const pipeline_1 = require("../src/pipeline");
     }, {
         nodes: [
             {
+                id: "repository:root",
+                kind: "repository",
+                label: "CodeForge"
+            },
+            {
                 id: "file:src/index.ts",
                 kind: "file",
                 label: "src/index.ts",

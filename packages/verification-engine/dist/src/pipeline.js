@@ -10,6 +10,7 @@ function verifyRepository(repository, graph) {
     engine.addRule(rules_1.contextGraphFilesExistInRepositoryRule);
     engine.addRule(rules_1.duplicateFileNodesRule);
     engine.addRule(rules_1.duplicateNodeIdsRule);
+    engine.addRule(rules_1.repositoryNodeRequiredRule);
     return engine.verify({
         files: repository.files.map((file) => file.path),
         graph

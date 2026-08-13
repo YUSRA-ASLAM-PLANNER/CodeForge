@@ -182,3 +182,62 @@ export const fileNodesRequireValidPathsRule: VerificationRule = {
     return violations;
   }
 };
+
+export const validContextGraphEdgeKindsRule: VerificationRule = {
+  id: "ARCH-007",
+  description:
+    "Every context graph edge must use a supported edge kind",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const validKinds = new Set([
+      "contains",
+      "imports",
+      "exports",
+      "references"
+    ]);
+
+    const violations: VerificationViolation[] = [];
+
+    for (const edge of context.graph.edges) {
+      if (!validKinds.has(edge.kind)) {
+        violations.push({
+          ruleId: "ARCH-007",
+          severity: "error",
+          message: `Unsupported context graph edge kind: ${edge.kind}`,
+          target: edge.kind
+        });
+      }
+    }
+
+    return violations;
+  }
+};
+export const repositoryNodeRequiredRule: VerificationRule = {
+  id: "ARCH-008",
+  description:
+    "The context graph must contain exactly one repository node",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const repositoryNodes = context.graph.nodes.filter(
+      (node) => node.kind === "repository"
+    );
+
+    if (repositoryNodes.length === 1) {
+      return [];
+    }
+
+    return [
+      {
+        ruleId: "ARCH-007",
+        severity: "error",
+        message:
+          repositoryNodes.length === 0
+            ? "Context graph is missing the repository node"
+            : `Context graph contains multiple repository nodes: ${repositoryNodes.length}`,
+        target: "repository"
+      }
+    ];
+  }
+};
