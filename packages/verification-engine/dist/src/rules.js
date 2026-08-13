@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -222,6 +222,25 @@ exports.repositoryNodeMustBeRootRule = {
                     ruleId: "ARCH-010",
                     severity: "error",
                     message: `Repository node must not have an incoming edge from: ${edge.from}`,
+                    target: edge.from
+                });
+            }
+        }
+        return violations;
+    }
+};
+exports.selfReferentialEdgeRule = {
+    id: "ARCH-011",
+    description: "Context graph edges must not connect a node to itself",
+    severity: "error",
+    check: (context) => {
+        const violations = [];
+        for (const edge of context.graph.edges) {
+            if (edge.from === edge.to) {
+                violations.push({
+                    ruleId: "ARCH-011",
+                    severity: "error",
+                    message: `Context graph edge cannot reference the same node: ${edge.from}`,
                     target: edge.from
                 });
             }

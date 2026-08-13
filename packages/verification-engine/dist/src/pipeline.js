@@ -14,6 +14,7 @@ function verifyRepository(repository, graph) {
     engine.addRule(rules_1.repositoryNodeRequiredRule);
     engine.addRule(rules_1.repositoryNodeIdRule);
     engine.addRule(rules_1.repositoryNodeMustBeRootRule);
+    engine.addRule(rules_1.selfReferentialEdgeRule);
     return engine.verify({
         files: repository.files.map((file) => file.path),
         graph

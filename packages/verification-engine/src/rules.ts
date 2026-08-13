@@ -292,3 +292,28 @@ export const repositoryNodeMustBeRootRule: VerificationRule = {
     return violations;
   }
 };
+
+export const selfReferentialEdgeRule: VerificationRule = {
+  id: "ARCH-011",
+  description:
+    "Context graph edges must not connect a node to itself",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const violations: VerificationViolation[] = [];
+
+    for (const edge of context.graph.edges) {
+      if (edge.from === edge.to) {
+        violations.push({
+          ruleId: "ARCH-011",
+          severity: "error",
+          message:
+            `Context graph edge cannot reference the same node: ${edge.from}`,
+          target: edge.from
+        });
+      }
+    }
+
+    return violations;
+  }
+};

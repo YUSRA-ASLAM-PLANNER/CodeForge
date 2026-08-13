@@ -8,7 +8,8 @@ import {
   validContextGraphEdgeKindsRule,
   repositoryNodeRequiredRule,
   repositoryNodeIdRule,
-  repositoryNodeMustBeRootRule
+  repositoryNodeMustBeRootRule,
+  selfReferentialEdgeRule
 } from "./rules";
 import type { VerificationResult } from "./models";
 import type { RepositorySnapshot } from "@codeforge/repository-indexer";
@@ -29,6 +30,7 @@ export function verifyRepository(
   engine.addRule(repositoryNodeRequiredRule);
   engine.addRule(repositoryNodeIdRule);
   engine.addRule(repositoryNodeMustBeRootRule);
+  engine.addRule(selfReferentialEdgeRule);
 
   return engine.verify({
     files: repository.files.map((file) => file.path),
