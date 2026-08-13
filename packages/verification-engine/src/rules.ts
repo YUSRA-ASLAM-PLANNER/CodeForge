@@ -268,3 +268,27 @@ export const repositoryNodeIdRule: VerificationRule = {
     return violations;
   }
 };
+export const repositoryNodeMustBeRootRule: VerificationRule = {
+  id: "ARCH-010",
+  description:
+    "The repository node must not have any incoming edges",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const violations: VerificationViolation[] = [];
+
+    for (const edge of context.graph.edges) {
+      if (edge.to === "repository:root") {
+        violations.push({
+          ruleId: "ARCH-010",
+          severity: "error",
+          message:
+            `Repository node must not have an incoming edge from: ${edge.from}`,
+          target: edge.from
+        });
+      }
+    }
+
+    return violations;
+  }
+};

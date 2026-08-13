@@ -9,11 +9,11 @@ function verifyRepository(repository, graph) {
     engine.addRule(rules_1.indexedFilesExistInContextGraphRule);
     engine.addRule(rules_1.contextGraphFilesExistInRepositoryRule);
     engine.addRule(rules_1.duplicateFileNodesRule);
-    engine.addRule(rules_1.duplicateNodeIdsRule);
     engine.addRule(rules_1.fileNodesRequireValidPathsRule);
     engine.addRule(rules_1.validContextGraphEdgeKindsRule);
     engine.addRule(rules_1.repositoryNodeRequiredRule);
     engine.addRule(rules_1.repositoryNodeIdRule);
+    engine.addRule(rules_1.repositoryNodeMustBeRootRule);
     return engine.verify({
         files: repository.files.map((file) => file.path),
         graph

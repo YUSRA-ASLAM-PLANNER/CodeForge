@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -204,6 +204,25 @@ exports.repositoryNodeIdRule = {
                     severity: "error",
                     message: `Repository node has invalid ID: ${node.id}`,
                     target: node.id
+                });
+            }
+        }
+        return violations;
+    }
+};
+exports.repositoryNodeMustBeRootRule = {
+    id: "ARCH-010",
+    description: "The repository node must not have any incoming edges",
+    severity: "error",
+    check: (context) => {
+        const violations = [];
+        for (const edge of context.graph.edges) {
+            if (edge.to === "repository:root") {
+                violations.push({
+                    ruleId: "ARCH-010",
+                    severity: "error",
+                    message: `Repository node must not have an incoming edge from: ${edge.from}`,
+                    target: edge.from
                 });
             }
         }
