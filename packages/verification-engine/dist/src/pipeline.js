@@ -19,6 +19,7 @@ function verifyRepository(repository, graph) {
     engine.addRule(rules_1.duplicateEdgesRule);
     engine.addRule(rules_1.orphanNodeRule);
     engine.addRule(rules_1.repositoryContainsAllTopLevelFilesRule);
+    engine.addRule(rules_1.directoryNodesRequireValidPathsRule);
     return engine.verify({
         files: repository.files.map((file) => file.path),
         graph

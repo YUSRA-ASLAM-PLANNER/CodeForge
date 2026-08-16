@@ -13,3 +13,4 @@ export declare const selfReferentialEdgeRule: VerificationRule;
 export declare const duplicateEdgesRule: VerificationRule;
 export declare const orphanNodeRule: VerificationRule;
 export declare const repositoryContainsAllTopLevelFilesRule: VerificationRule;
+export declare const directoryNodesRequireValidPathsRule: VerificationRule;

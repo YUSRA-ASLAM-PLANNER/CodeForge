@@ -421,3 +421,30 @@ export const repositoryContainsAllTopLevelFilesRule: VerificationRule = {
     return violations;
   }
 };
+export const directoryNodesRequireValidPathsRule: VerificationRule = {
+  id: "ARCH-015",
+  description:
+    "Every directory node in the context graph must have a non-empty path",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const violations: VerificationViolation[] = [];
+
+    for (const node of context.graph.nodes) {
+      if (node.kind !== "directory") {
+        continue;
+      }
+
+      if (!node.path || node.path.trim().length === 0) {
+        violations.push({
+          ruleId: "ARCH-015",
+          severity: "error",
+          message: `Directory node has missing or empty path: ${node.id}`,
+          target: node.id
+        });
+      }
+    }
+
+    return violations;
+  }
+};

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.repositoryContainsAllTopLevelFilesRule = exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.directoryNodesRequireValidPathsRule = exports.repositoryContainsAllTopLevelFilesRule = exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -318,6 +318,28 @@ exports.repositoryContainsAllTopLevelFilesRule = {
                     ruleId: "ARCH-014",
                     severity: "error",
                     message: `Top-level file is not connected to repository: ${node.id}`,
+                    target: node.id
+                });
+            }
+        }
+        return violations;
+    }
+};
+exports.directoryNodesRequireValidPathsRule = {
+    id: "ARCH-015",
+    description: "Every directory node in the context graph must have a non-empty path",
+    severity: "error",
+    check: (context) => {
+        const violations = [];
+        for (const node of context.graph.nodes) {
+            if (node.kind !== "directory") {
+                continue;
+            }
+            if (!node.path || node.path.trim().length === 0) {
+                violations.push({
+                    ruleId: "ARCH-015",
+                    severity: "error",
+                    message: `Directory node has missing or empty path: ${node.id}`,
                     target: node.id
                 });
             }
