@@ -317,3 +317,33 @@ export const selfReferentialEdgeRule: VerificationRule = {
     return violations;
   }
 };
+
+export const duplicateEdgesRule: VerificationRule = {
+  id: "ARCH-012",
+  description:
+    "Context graph edges must be unique by source, target, and kind",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const seen = new Set<string>();
+    const violations: VerificationViolation[] = [];
+
+    for (const edge of context.graph.edges) {
+      const key = `${edge.from}|${edge.kind}|${edge.to}`;
+
+      if (seen.has(key)) {
+        violations.push({
+          ruleId: "ARCH-012",
+          severity: "error",
+          message:
+            `Duplicate context graph edge: ${edge.from} -> ${edge.to} (${edge.kind})`,
+          target: key
+        });
+      } else {
+        seen.add(key);
+      }
+    }
+
+    return violations;
+  }
+};

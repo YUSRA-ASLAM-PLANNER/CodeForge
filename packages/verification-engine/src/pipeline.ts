@@ -4,12 +4,14 @@ import {
   indexedFilesExistInContextGraphRule,
   contextGraphFilesExistInRepositoryRule,
   duplicateFileNodesRule,
+  duplicateNodeIdsRule,
   fileNodesRequireValidPathsRule,
   validContextGraphEdgeKindsRule,
   repositoryNodeRequiredRule,
   repositoryNodeIdRule,
   repositoryNodeMustBeRootRule,
-  selfReferentialEdgeRule
+  selfReferentialEdgeRule,
+  duplicateEdgesRule
 } from "./rules";
 import type { VerificationResult } from "./models";
 import type { RepositorySnapshot } from "@codeforge/repository-indexer";
@@ -25,12 +27,14 @@ export function verifyRepository(
   engine.addRule(indexedFilesExistInContextGraphRule);
   engine.addRule(contextGraphFilesExistInRepositoryRule);
   engine.addRule(duplicateFileNodesRule);
+  engine.addRule(duplicateNodeIdsRule);
   engine.addRule(fileNodesRequireValidPathsRule);
   engine.addRule(validContextGraphEdgeKindsRule);
   engine.addRule(repositoryNodeRequiredRule);
   engine.addRule(repositoryNodeIdRule);
   engine.addRule(repositoryNodeMustBeRootRule);
   engine.addRule(selfReferentialEdgeRule);
+  engine.addRule(duplicateEdgesRule);
 
   return engine.verify({
     files: repository.files.map((file) => file.path),

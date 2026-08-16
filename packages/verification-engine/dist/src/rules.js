@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -243,6 +243,30 @@ exports.selfReferentialEdgeRule = {
                     message: `Context graph edge cannot reference the same node: ${edge.from}`,
                     target: edge.from
                 });
+            }
+        }
+        return violations;
+    }
+};
+exports.duplicateEdgesRule = {
+    id: "ARCH-012",
+    description: "Context graph edges must be unique by source, target, and kind",
+    severity: "error",
+    check: (context) => {
+        const seen = new Set();
+        const violations = [];
+        for (const edge of context.graph.edges) {
+            const key = `${edge.from}|${edge.kind}|${edge.to}`;
+            if (seen.has(key)) {
+                violations.push({
+                    ruleId: "ARCH-012",
+                    severity: "error",
+                    message: `Duplicate context graph edge: ${edge.from} -> ${edge.to} (${edge.kind})`,
+                    target: key
+                });
+            }
+            else {
+                seen.add(key);
             }
         }
         return violations;
