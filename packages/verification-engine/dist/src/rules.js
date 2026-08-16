@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -267,6 +267,33 @@ exports.duplicateEdgesRule = {
             }
             else {
                 seen.add(key);
+            }
+        }
+        return violations;
+    }
+};
+exports.orphanNodeRule = {
+    id: "ARCH-013",
+    description: "Every non-repository node must be connected to at least one edge",
+    severity: "error",
+    check: (context) => {
+        const connectedNodeIds = new Set();
+        for (const edge of context.graph.edges) {
+            connectedNodeIds.add(edge.from);
+            connectedNodeIds.add(edge.to);
+        }
+        const violations = [];
+        for (const node of context.graph.nodes) {
+            if (node.kind === "repository") {
+                continue;
+            }
+            if (!connectedNodeIds.has(node.id)) {
+                violations.push({
+                    ruleId: "ARCH-013",
+                    severity: "error",
+                    message: `Context graph node is orphaned and has no connected edges: ${node.id}`,
+                    target: node.id
+                });
             }
         }
         return violations;

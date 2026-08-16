@@ -347,3 +347,38 @@ export const duplicateEdgesRule: VerificationRule = {
     return violations;
   }
 };
+export const orphanNodeRule: VerificationRule = {
+  id: "ARCH-013",
+  description:
+    "Every non-repository node must be connected to at least one edge",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const connectedNodeIds = new Set<string>();
+
+    for (const edge of context.graph.edges) {
+      connectedNodeIds.add(edge.from);
+      connectedNodeIds.add(edge.to);
+    }
+
+    const violations: VerificationViolation[] = [];
+
+    for (const node of context.graph.nodes) {
+      if (node.kind === "repository") {
+        continue;
+      }
+
+      if (!connectedNodeIds.has(node.id)) {
+        violations.push({
+          ruleId: "ARCH-013",
+          severity: "error",
+          message:
+            `Context graph node is orphaned and has no connected edges: ${node.id}`,
+          target: node.id
+        });
+      }
+    }
+
+    return violations;
+  }
+};

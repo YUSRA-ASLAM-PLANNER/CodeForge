@@ -11,3 +11,4 @@ export declare const repositoryNodeIdRule: VerificationRule;
 export declare const repositoryNodeMustBeRootRule: VerificationRule;
 export declare const selfReferentialEdgeRule: VerificationRule;
 export declare const duplicateEdgesRule: VerificationRule;
+export declare const orphanNodeRule: VerificationRule;
