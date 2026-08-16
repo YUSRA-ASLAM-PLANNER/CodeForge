@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.repositoryContainsAllTopLevelFilesRule = exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -292,6 +292,32 @@ exports.orphanNodeRule = {
                     ruleId: "ARCH-013",
                     severity: "error",
                     message: `Context graph node is orphaned and has no connected edges: ${node.id}`,
+                    target: node.id
+                });
+            }
+        }
+        return violations;
+    }
+};
+exports.repositoryContainsAllTopLevelFilesRule = {
+    id: "ARCH-014",
+    description: "Every top-level file node must be connected to the repository node",
+    severity: "error",
+    check: (context) => {
+        const violations = [];
+        const repositoryContainsEdges = new Set(context.graph.edges
+            .filter((edge) => edge.from === "repository:root" &&
+            edge.kind === "contains")
+            .map((edge) => edge.to));
+        for (const node of context.graph.nodes) {
+            if (node.kind !== "file") {
+                continue;
+            }
+            if (!repositoryContainsEdges.has(node.id)) {
+                violations.push({
+                    ruleId: "ARCH-014",
+                    severity: "error",
+                    message: `Top-level file is not connected to repository: ${node.id}`,
                     target: node.id
                 });
             }

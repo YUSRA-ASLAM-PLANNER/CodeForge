@@ -41,6 +41,6 @@ const pipeline_1 = require("../src/pipeline");
         ]
     });
     strict_1.default.equal(result.passed, false);
-    strict_1.default.equal(result.violations.length, 1);
+    strict_1.default.equal(result.violations.length, 2);
     strict_1.default.equal(result.violations[0].ruleId, "ARCH-001");
 });

@@ -382,3 +382,42 @@ export const orphanNodeRule: VerificationRule = {
     return violations;
   }
 };
+
+export const repositoryContainsAllTopLevelFilesRule: VerificationRule = {
+  id: "ARCH-014",
+  description:
+    "Every top-level file node must be connected to the repository node",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const violations: VerificationViolation[] = [];
+
+    const repositoryContainsEdges = new Set(
+      context.graph.edges
+        .filter(
+          (edge) =>
+            edge.from === "repository:root" &&
+            edge.kind === "contains"
+        )
+        .map((edge) => edge.to)
+    );
+
+    for (const node of context.graph.nodes) {
+      if (node.kind !== "file") {
+        continue;
+      }
+
+      if (!repositoryContainsEdges.has(node.id)) {
+        violations.push({
+          ruleId: "ARCH-014",
+          severity: "error",
+          message:
+            `Top-level file is not connected to repository: ${node.id}`,
+          target: node.id
+        });
+      }
+    }
+
+    return violations;
+  }
+};

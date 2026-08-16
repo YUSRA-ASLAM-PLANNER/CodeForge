@@ -12,7 +12,8 @@ import {
   repositoryNodeMustBeRootRule,
   selfReferentialEdgeRule,
   duplicateEdgesRule,
-  orphanNodeRule
+  orphanNodeRule,
+ repositoryContainsAllTopLevelFilesRule
 } from "./rules";
 import type { VerificationResult } from "./models";
 import type { RepositorySnapshot } from "@codeforge/repository-indexer";
@@ -37,6 +38,7 @@ export function verifyRepository(
   engine.addRule(selfReferentialEdgeRule);
   engine.addRule(duplicateEdgesRule);
   engine.addRule(orphanNodeRule);
+ engine.addRule(repositoryContainsAllTopLevelFilesRule);
 
   return engine.verify({
     files: repository.files.map((file) => file.path),
