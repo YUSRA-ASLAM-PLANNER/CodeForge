@@ -448,3 +448,46 @@ export const directoryNodesRequireValidPathsRule: VerificationRule = {
     return violations;
   }
 };
+export const directoryNodesRequireParentRule: VerificationRule = {
+  id: "ARCH-016",
+  description:
+    "Every directory node must have a contains edge from its parent directory or repository node",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const violations: VerificationViolation[] = [];
+
+    for (const node of context.graph.nodes) {
+      if (node.kind !== "directory") {
+        continue;
+      }
+
+      const parentPath = node.path?.includes("/")
+        ? node.path.slice(0, node.path.lastIndexOf("/"))
+        : null;
+
+      const expectedParentId = parentPath
+        ? `directory:${parentPath}`
+        : "repository:root";
+
+      const hasParentEdge = context.graph.edges.some(
+        (edge) =>
+          edge.from === expectedParentId &&
+          edge.to === node.id &&
+          edge.kind === "contains"
+      );
+
+      if (!hasParentEdge) {
+        violations.push({
+          ruleId: "ARCH-016",
+          severity: "error",
+          message:
+            `Directory node is not connected to its parent: ${node.id}`,
+          target: node.id
+        });
+      }
+    }
+
+    return violations;
+  }
+};

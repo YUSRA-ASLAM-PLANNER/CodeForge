@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.directoryNodesRequireValidPathsRule = exports.repositoryContainsAllTopLevelFilesRule = exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.directoryNodesRequireParentRule = exports.directoryNodesRequireValidPathsRule = exports.repositoryContainsAllTopLevelFilesRule = exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -340,6 +340,37 @@ exports.directoryNodesRequireValidPathsRule = {
                     ruleId: "ARCH-015",
                     severity: "error",
                     message: `Directory node has missing or empty path: ${node.id}`,
+                    target: node.id
+                });
+            }
+        }
+        return violations;
+    }
+};
+exports.directoryNodesRequireParentRule = {
+    id: "ARCH-016",
+    description: "Every directory node must have a contains edge from its parent directory or repository node",
+    severity: "error",
+    check: (context) => {
+        const violations = [];
+        for (const node of context.graph.nodes) {
+            if (node.kind !== "directory") {
+                continue;
+            }
+            const parentPath = node.path?.includes("/")
+                ? node.path.slice(0, node.path.lastIndexOf("/"))
+                : null;
+            const expectedParentId = parentPath
+                ? `directory:${parentPath}`
+                : "repository:root";
+            const hasParentEdge = context.graph.edges.some((edge) => edge.from === expectedParentId &&
+                edge.to === node.id &&
+                edge.kind === "contains");
+            if (!hasParentEdge) {
+                violations.push({
+                    ruleId: "ARCH-016",
+                    severity: "error",
+                    message: `Directory node is not connected to its parent: ${node.id}`,
                     target: node.id
                 });
             }
