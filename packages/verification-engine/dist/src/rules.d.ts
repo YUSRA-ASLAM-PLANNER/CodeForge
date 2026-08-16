@@ -15,3 +15,4 @@ export declare const orphanNodeRule: VerificationRule;
 export declare const repositoryContainsAllTopLevelFilesRule: VerificationRule;
 export declare const directoryNodesRequireValidPathsRule: VerificationRule;
 export declare const directoryNodesRequireParentRule: VerificationRule;
+export declare const fileNodesRequireParentRule: VerificationRule;

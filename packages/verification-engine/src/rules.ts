@@ -491,3 +491,51 @@ export const directoryNodesRequireParentRule: VerificationRule = {
     return violations;
   }
 };
+export const fileNodesRequireParentRule: VerificationRule = {
+  id: "ARCH-017",
+  description:
+    "Every file node must have a contains edge from its parent directory or repository node",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const violations: VerificationViolation[] = [];
+
+    for (const node of context.graph.nodes) {
+      if (node.kind !== "file") {
+        continue;
+      }
+
+      const filePath = node.path;
+
+      if (!filePath || filePath.trim().length === 0) {
+        continue;
+      }
+
+      const lastSlash = filePath.lastIndexOf("/");
+
+      const expectedParentId =
+        lastSlash === -1
+          ? "repository:root"
+          : `directory:${filePath.slice(0, lastSlash)}`;
+
+      const hasParentEdge = context.graph.edges.some(
+        (edge) =>
+          edge.from === expectedParentId &&
+          edge.to === node.id &&
+          edge.kind === "contains"
+      );
+
+      if (!hasParentEdge) {
+        violations.push({
+          ruleId: "ARCH-017",
+          severity: "error",
+          message:
+            `File node is not connected to its parent: ${node.id}`,
+          target: node.id
+        });
+      }
+    }
+
+    return violations;
+  }
+};

@@ -41,6 +41,6 @@ test("repository verification pipeline detects graph violations", () => {
   );
 
   assert.equal(result.passed, false);
-  assert.equal(result.violations.length, 2);
+  assert.equal(result.violations.length, 3);
   assert.equal(result.violations[0].ruleId, "ARCH-001");
 });

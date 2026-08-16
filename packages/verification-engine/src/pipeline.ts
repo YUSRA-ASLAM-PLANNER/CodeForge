@@ -14,7 +14,8 @@ import {
   duplicateEdgesRule,
   orphanNodeRule,
  repositoryContainsAllTopLevelFilesRule,
- directoryNodesRequireValidPathsRule
+ directoryNodesRequireValidPathsRule,
+fileNodesRequireParentRule
 } from "./rules";
 import type { VerificationResult } from "./models";
 import type { RepositorySnapshot } from "@codeforge/repository-indexer";
@@ -41,6 +42,7 @@ export function verifyRepository(
   engine.addRule(orphanNodeRule);
  engine.addRule(repositoryContainsAllTopLevelFilesRule);
 engine.addRule(directoryNodesRequireValidPathsRule);
+engine.addRule(fileNodesRequireParentRule);
   return engine.verify({
     files: repository.files.map((file) => file.path),
     graph
