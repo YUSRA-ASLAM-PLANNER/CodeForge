@@ -17,7 +17,8 @@ import {
   directoryNodesRequireValidPathsRule,
   fileNodesRequireParentRule,
   containsEdgesMustPointParentToChildRule,
-containsEdgesMustMatchPathsRule
+containsEdgesMustMatchPathsRule,
+fileNodesMustMatchRepositoryFilesRule
 } from "./rules";
 
 import type { VerificationResult } from "./models";
@@ -48,6 +49,7 @@ export function verifyRepository(
   engine.addRule(fileNodesRequireParentRule);
   engine.addRule(containsEdgesMustPointParentToChildRule);
   engine.addRule(containsEdgesMustMatchPathsRule);
+engine.addRule(fileNodesMustMatchRepositoryFilesRule);
   return engine.verify({
     files: repository.files.map((file) => file.path),
     graph

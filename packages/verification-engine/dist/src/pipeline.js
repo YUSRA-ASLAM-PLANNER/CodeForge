@@ -23,6 +23,7 @@ function verifyRepository(repository, graph) {
     engine.addRule(rules_1.fileNodesRequireParentRule);
     engine.addRule(rules_1.containsEdgesMustPointParentToChildRule);
     engine.addRule(rules_1.containsEdgesMustMatchPathsRule);
+    engine.addRule(rules_1.fileNodesMustMatchRepositoryFilesRule);
     return engine.verify({
         files: repository.files.map((file) => file.path),
         graph

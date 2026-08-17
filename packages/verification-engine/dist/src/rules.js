@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.containsEdgesMustMatchPathsRule = exports.containsEdgesMustPointParentToChildRule = exports.fileNodesRequireParentRule = exports.directoryNodesRequireParentRule = exports.directoryNodesRequireValidPathsRule = exports.repositoryContainsAllTopLevelFilesRule = exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.fileNodesMustMatchRepositoryFilesRule = exports.containsEdgesMustMatchPathsRule = exports.containsEdgesMustPointParentToChildRule = exports.fileNodesRequireParentRule = exports.directoryNodesRequireParentRule = exports.directoryNodesRequireValidPathsRule = exports.repositoryContainsAllTopLevelFilesRule = exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -483,6 +483,32 @@ exports.containsEdgesMustMatchPathsRule = {
                     severity: "error",
                     message: `Contains edge does not match parent-child paths: ${edge.from} -> ${edge.to}`,
                     target: `${edge.from}->${edge.to}`
+                });
+            }
+        }
+        return violations;
+    }
+};
+exports.fileNodesMustMatchRepositoryFilesRule = {
+    id: "ARCH-020",
+    description: "Every file node in the context graph must correspond to an indexed repository file",
+    severity: "error",
+    check: (context) => {
+        const repositoryFiles = new Set(context.files);
+        const violations = [];
+        for (const node of context.graph.nodes) {
+            if (node.kind !== "file") {
+                continue;
+            }
+            if (!node.path || node.path.trim().length === 0) {
+                continue;
+            }
+            if (!repositoryFiles.has(node.path)) {
+                violations.push({
+                    ruleId: "ARCH-020",
+                    severity: "error",
+                    message: `File node does not correspond to an indexed repository file: ${node.id}`,
+                    target: node.id
                 });
             }
         }

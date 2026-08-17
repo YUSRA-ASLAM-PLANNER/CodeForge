@@ -652,3 +652,36 @@ export const containsEdgesMustMatchPathsRule: VerificationRule = {
     return violations;
   }
 };
+export const fileNodesMustMatchRepositoryFilesRule: VerificationRule = {
+  id: "ARCH-020",
+  description:
+    "Every file node in the context graph must correspond to an indexed repository file",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const repositoryFiles = new Set(context.files);
+    const violations: VerificationViolation[] = [];
+
+    for (const node of context.graph.nodes) {
+      if (node.kind !== "file") {
+        continue;
+      }
+
+      if (!node.path || node.path.trim().length === 0) {
+        continue;
+      }
+
+      if (!repositoryFiles.has(node.path)) {
+        violations.push({
+          ruleId: "ARCH-020",
+          severity: "error",
+          message:
+            `File node does not correspond to an indexed repository file: ${node.id}`,
+          target: node.id
+        });
+      }
+    }
+
+    return violations;
+  }
+};
