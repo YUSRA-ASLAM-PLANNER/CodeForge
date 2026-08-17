@@ -13,10 +13,13 @@ import {
   selfReferentialEdgeRule,
   duplicateEdgesRule,
   orphanNodeRule,
- repositoryContainsAllTopLevelFilesRule,
- directoryNodesRequireValidPathsRule,
-fileNodesRequireParentRule
+  repositoryContainsAllTopLevelFilesRule,
+  directoryNodesRequireValidPathsRule,
+  fileNodesRequireParentRule,
+  containsEdgesMustPointParentToChildRule,
+containsEdgesMustMatchPathsRule
 } from "./rules";
+
 import type { VerificationResult } from "./models";
 import type { RepositorySnapshot } from "@codeforge/repository-indexer";
 import type { ContextGraph } from "@codeforge/context-graph";
@@ -40,9 +43,11 @@ export function verifyRepository(
   engine.addRule(selfReferentialEdgeRule);
   engine.addRule(duplicateEdgesRule);
   engine.addRule(orphanNodeRule);
- engine.addRule(repositoryContainsAllTopLevelFilesRule);
-engine.addRule(directoryNodesRequireValidPathsRule);
-engine.addRule(fileNodesRequireParentRule);
+  engine.addRule(repositoryContainsAllTopLevelFilesRule);
+  engine.addRule(directoryNodesRequireValidPathsRule);
+  engine.addRule(fileNodesRequireParentRule);
+  engine.addRule(containsEdgesMustPointParentToChildRule);
+  engine.addRule(containsEdgesMustMatchPathsRule);
   return engine.verify({
     files: repository.files.map((file) => file.path),
     graph

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.fileNodesRequireParentRule = exports.directoryNodesRequireParentRule = exports.directoryNodesRequireValidPathsRule = exports.repositoryContainsAllTopLevelFilesRule = exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.containsEdgesMustMatchPathsRule = exports.containsEdgesMustPointParentToChildRule = exports.fileNodesRequireParentRule = exports.directoryNodesRequireParentRule = exports.directoryNodesRequireValidPathsRule = exports.repositoryContainsAllTopLevelFilesRule = exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -405,6 +405,84 @@ exports.fileNodesRequireParentRule = {
                     severity: "error",
                     message: `File node is not connected to its parent: ${node.id}`,
                     target: node.id
+                });
+            }
+        }
+        return violations;
+    }
+};
+exports.containsEdgesMustPointParentToChildRule = {
+    id: "ARCH-018",
+    description: "Every contains edge must connect a parent node to a child node",
+    severity: "error",
+    check: (context) => {
+        const violations = [];
+        for (const edge of context.graph.edges) {
+            if (edge.kind !== "contains") {
+                continue;
+            }
+            const fromNode = context.graph.nodes.find((node) => node.id === edge.from);
+            const toNode = context.graph.nodes.find((node) => node.id === edge.to);
+            if (!fromNode || !toNode) {
+                continue;
+            }
+            const validParentChild = (fromNode.kind === "repository" &&
+                (toNode.kind === "directory" || toNode.kind === "file")) ||
+                (fromNode.kind === "directory" &&
+                    (toNode.kind === "directory" || toNode.kind === "file"));
+            if (!validParentChild) {
+                violations.push({
+                    ruleId: "ARCH-018",
+                    severity: "error",
+                    message: `Contains edge does not represent a valid parent-child relationship: ${edge.from} -> ${edge.to}`,
+                    target: `${edge.from}->${edge.to}`
+                });
+            }
+        }
+        return violations;
+    }
+};
+exports.containsEdgesMustMatchPathsRule = {
+    id: "ARCH-019",
+    description: "Every contains edge between directories and files must match the nodes' paths",
+    severity: "error",
+    check: (context) => {
+        const violations = [];
+        for (const edge of context.graph.edges) {
+            if (edge.kind !== "contains") {
+                continue;
+            }
+            const fromNode = context.graph.nodes.find((node) => node.id === edge.from);
+            const toNode = context.graph.nodes.find((node) => node.id === edge.to);
+            if (!fromNode || !toNode) {
+                continue;
+            }
+            if (fromNode.kind === "repository") {
+                continue;
+            }
+            if (fromNode.kind !== "directory") {
+                continue;
+            }
+            if (!fromNode.path || !toNode.path) {
+                continue;
+            }
+            const expectedParentPath = fromNode.path;
+            const toPath = toNode.path;
+            const isDirectChild = toNode.kind === "directory"
+                ? toPath.startsWith(`${expectedParentPath}/`) &&
+                    !toPath
+                        .slice(expectedParentPath.length + 1)
+                        .includes("/")
+                : toPath.startsWith(`${expectedParentPath}/`) &&
+                    !toPath
+                        .slice(expectedParentPath.length + 1)
+                        .includes("/");
+            if (!isDirectChild) {
+                violations.push({
+                    ruleId: "ARCH-019",
+                    severity: "error",
+                    message: `Contains edge does not match parent-child paths: ${edge.from} -> ${edge.to}`,
+                    target: `${edge.from}->${edge.to}`
                 });
             }
         }
