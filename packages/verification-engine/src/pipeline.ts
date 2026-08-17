@@ -18,7 +18,9 @@ import {
   fileNodesRequireParentRule,
   containsEdgesMustPointParentToChildRule,
 containsEdgesMustMatchPathsRule,
-fileNodesMustMatchRepositoryFilesRule
+  containsEdgesMustMatchPathsRule022,
+fileNodesMustMatchRepositoryFilesRule,
+directoryNodesMustMatchRepositoryStructureRule
 } from "./rules";
 
 import type { VerificationResult } from "./models";
@@ -49,7 +51,9 @@ export function verifyRepository(
   engine.addRule(fileNodesRequireParentRule);
   engine.addRule(containsEdgesMustPointParentToChildRule);
   engine.addRule(containsEdgesMustMatchPathsRule);
+  engine.addRule(containsEdgesMustMatchPathsRule022);
 engine.addRule(fileNodesMustMatchRepositoryFilesRule);
+engine.addRule(directoryNodesMustMatchRepositoryStructureRule);
   return engine.verify({
     files: repository.files.map((file) => file.path),
     graph

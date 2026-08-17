@@ -19,3 +19,5 @@ export declare const fileNodesRequireParentRule: VerificationRule;
 export declare const containsEdgesMustPointParentToChildRule: VerificationRule;
 export declare const containsEdgesMustMatchPathsRule: VerificationRule;
 export declare const fileNodesMustMatchRepositoryFilesRule: VerificationRule;
+export declare const directoryNodesMustMatchRepositoryStructureRule: VerificationRule;
+export declare const containsEdgesMustMatchPathsRule022: VerificationRule;

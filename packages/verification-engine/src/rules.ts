@@ -685,3 +685,113 @@ export const fileNodesMustMatchRepositoryFilesRule: VerificationRule = {
     return violations;
   }
 };
+export const directoryNodesMustMatchRepositoryStructureRule: VerificationRule = {
+  id: "ARCH-021",
+  description:
+    "Every directory node must correspond to a directory represented by repository files",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const violations: VerificationViolation[] = [];
+
+    const repositoryDirectories = new Set<string>();
+
+    for (const filePath of context.files) {
+      const parts = filePath.split("/");
+
+      for (let i = 1; i < parts.length; i++) {
+        repositoryDirectories.add(parts.slice(0, i).join("/"));
+      }
+    }
+
+    for (const node of context.graph.nodes) {
+      if (node.kind !== "directory") {
+        continue;
+      }
+
+      if (!node.path || node.path.trim().length === 0) {
+        continue;
+      }
+
+      if (!repositoryDirectories.has(node.path)) {
+        violations.push({
+          ruleId: "ARCH-021",
+          severity: "error",
+          message:
+            `Directory node does not correspond to repository structure: ${node.id}`,
+          target: node.id
+        });
+      }
+    }
+
+    return violations;
+  }
+};
+export const containsEdgesMustMatchPathsRule022: VerificationRule = {
+  id: "ARCH-022",
+  description:
+    "Every contains edge between directories or files must match the parent-child paths",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const violations: VerificationViolation[] = [];
+
+    for (const edge of context.graph.edges) {
+      if (edge.kind !== "contains") {
+        continue;
+      }
+
+      const fromNode = context.graph.nodes.find(
+        (node) => node.id === edge.from
+      );
+
+      const toNode = context.graph.nodes.find(
+        (node) => node.id === edge.to
+      );
+
+      if (!fromNode || !toNode) {
+        continue;
+      }
+
+      if (fromNode.kind === "repository") {
+        continue;
+      }
+
+      if (fromNode.kind === "directory" && toNode.kind === "directory") {
+        const expectedParent =
+          toNode.path?.includes("/")
+            ? toNode.path.slice(0, toNode.path.lastIndexOf("/"))
+            : null;
+
+        if (expectedParent !== fromNode.path) {
+          violations.push({
+            ruleId: "ARCH-022",
+            severity: "error",
+            message:
+              `Directory contains edge does not match paths: ${edge.from} -> ${edge.to}`,
+            target: `${edge.from}->${edge.to}`
+          });
+        }
+      }
+
+      if (fromNode.kind === "directory" && toNode.kind === "file") {
+        const expectedParent =
+          toNode.path?.includes("/")
+            ? toNode.path.slice(0, toNode.path.lastIndexOf("/"))
+            : null;
+
+        if (expectedParent !== fromNode.path) {
+          violations.push({
+            ruleId: "ARCH-022",
+            severity: "error",
+            message:
+              `File contains edge does not match paths: ${edge.from} -> ${edge.to}`,
+            target: `${edge.from}->${edge.to}`
+          });
+        }
+      }
+    }
+
+    return violations;
+  }
+};
