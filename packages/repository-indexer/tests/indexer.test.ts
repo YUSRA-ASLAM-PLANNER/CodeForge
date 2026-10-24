@@ -40,3 +40,85 @@ test("returns files in sorted path order", async () => {
     ["a.ts", "m.ts", "z.ts"]
   );
 });
+
+test("detects static, re-export, and dynamic imports", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codeforge-imports-"));
+
+  await writeFile(
+    join(root, "main.ts"),
+    [
+      'import { helper } from "./helper";',
+      'export { value } from "./values";',
+      'const lazy = import("./lazy");',
+      "const result = helper;"
+    ].join("\n")
+  );
+
+  const snapshot = await indexRepository(root);
+  const mainFile = snapshot.files.find((file) => file.path === "main.ts");
+
+  assert.ok(mainFile);
+  assert.deepEqual(mainFile.imports, [
+    "./helper",
+    "./lazy",
+    "./values"
+  ]);
+});
+
+test("preserves TypeScript path alias import specifiers", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codeforge-alias-"));
+
+  await mkdir(join(root, "src", "database"), { recursive: true });
+
+  await writeFile(
+    join(root, "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: {
+        baseUrl: ".",
+        paths: {
+          "@database/*": ["src/database/*"]
+        }
+      }
+    })
+  );
+
+  await writeFile(
+    join(root, "src", "database", "query.ts"),
+    "export const query = () => true;"
+  );
+
+  await writeFile(
+    join(root, "src", "index.ts"),
+    'import { query } from "@database/query";\nexport { query };'
+  );
+
+  const snapshot = await indexRepository(root);
+  const indexFile = snapshot.files.find(
+    (file) => file.path === "src/index.ts"
+  );
+
+  assert.ok(indexFile);
+  assert.deepEqual(indexFile.imports, ["@database/query"]);
+  assert.deepEqual(indexFile.resolvedImports, ["src/database/query.ts"]);
+});
+
+test("continues to detect relative imports alongside aliases", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codeforge-mixed-imports-"));
+
+  await writeFile(
+    join(root, "main.ts"),
+    [
+      'import { helper } from "./helper";',
+      'import { query } from "@database/query";'
+    ].join("\n")
+  );
+
+  const snapshot = await indexRepository(root);
+  const mainFile = snapshot.files.find((file) => file.path === "main.ts");
+
+  assert.ok(mainFile);
+  assert.deepEqual(mainFile.imports, [
+    "./helper",
+    "@database/query"
+  ]);
+});

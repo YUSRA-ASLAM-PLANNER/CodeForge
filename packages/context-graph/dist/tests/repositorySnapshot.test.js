@@ -24,11 +24,12 @@ const repositoryGraph_1 = require("../src/repositoryGraph");
         fileCount: 2,
         totalBytes: 300
     });
-    strict_1.default.equal(graph.nodes.length, 3);
-    strict_1.default.equal(graph.edges.length, 2);
+    strict_1.default.equal(graph.nodes.length, 4);
+    strict_1.default.equal(graph.edges.length, 3);
     strict_1.default.deepEqual(graph.nodes.map((node) => node.id), [
+        "directory:src",
         "file:src/app.ts",
         "file:src/index.ts",
-        "repository"
+        "repository:root"
     ]);
 });

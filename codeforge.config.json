@@ -1,0 +1,16 @@
+
+{
+  "architecture": {
+    "autoDetectLayers": true,
+    "importBoundaries": [
+      {
+        "from": "ui",
+        "to": "database"
+      },
+      {
+        "from": "ui",
+        "to": "infrastructure"
+      }
+    ]
+  }
+}

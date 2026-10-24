@@ -21,3 +21,5 @@ export declare const containsEdgesMustMatchPathsRule: VerificationRule;
 export declare const fileNodesMustMatchRepositoryFilesRule: VerificationRule;
 export declare const directoryNodesMustMatchRepositoryStructureRule: VerificationRule;
 export declare const containsEdgesMustMatchPathsRule022: VerificationRule;
+export declare const internalImportsMustResolveRule023: VerificationRule;
+export declare const importBoundaryEnforcementRule024: VerificationRule;

@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "@codeforge/verification-engine",
   "version": "0.1.0",
   "private": true,
@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build"
+    "test": "npm run build && npm run test:build && node --test dist-tests/tests/*.test.js",
+    "test:build": "tsc -p tsconfig.tests.json"
   }
 }

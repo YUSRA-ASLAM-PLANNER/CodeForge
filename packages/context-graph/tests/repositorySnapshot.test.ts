@@ -1,3 +1,4 @@
+
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildContextGraphFromSnapshot } from "../src/repositoryGraph";
@@ -21,15 +22,16 @@ test("builds context graph from repository snapshot", () => {
     totalBytes: 300
   });
 
-  assert.equal(graph.nodes.length, 3);
-  assert.equal(graph.edges.length, 2);
+  assert.equal(graph.nodes.length, 4);
+  assert.equal(graph.edges.length, 3);
 
   assert.deepEqual(
     graph.nodes.map((node) => node.id),
     [
+      "directory:src",
       "file:src/app.ts",
       "file:src/index.ts",
-      "repository"
+      "repository:root"
     ]
   );
 });

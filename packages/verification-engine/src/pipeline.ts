@@ -1,3 +1,4 @@
+
 import { VerificationEngine } from "./engine";
 import {
   contextGraphReferentialIntegrityRule,
@@ -17,19 +18,25 @@ import {
   directoryNodesRequireValidPathsRule,
   fileNodesRequireParentRule,
   containsEdgesMustPointParentToChildRule,
-containsEdgesMustMatchPathsRule,
+  containsEdgesMustMatchPathsRule,
   containsEdgesMustMatchPathsRule022,
-fileNodesMustMatchRepositoryFilesRule,
-directoryNodesMustMatchRepositoryStructureRule
+  fileNodesMustMatchRepositoryFilesRule,
+  directoryNodesMustMatchRepositoryStructureRule,
+  internalImportsMustResolveRule023,
+  importBoundaryEnforcementRule024
 } from "./rules";
 
-import type { VerificationResult } from "./models";
+import type {
+  VerificationResult,
+  ArchitectureImportBoundary
+} from "./models";
 import type { RepositorySnapshot } from "@codeforge/repository-indexer";
 import type { ContextGraph } from "@codeforge/context-graph";
 
 export function verifyRepository(
   repository: RepositorySnapshot,
-  graph: ContextGraph
+  graph: ContextGraph,
+  architectureImportBoundaries: ArchitectureImportBoundary[] = []
 ): VerificationResult {
   const engine = new VerificationEngine();
 
@@ -52,10 +59,20 @@ export function verifyRepository(
   engine.addRule(containsEdgesMustPointParentToChildRule);
   engine.addRule(containsEdgesMustMatchPathsRule);
   engine.addRule(containsEdgesMustMatchPathsRule022);
-engine.addRule(fileNodesMustMatchRepositoryFilesRule);
-engine.addRule(directoryNodesMustMatchRepositoryStructureRule);
+  engine.addRule(fileNodesMustMatchRepositoryFilesRule);
+  engine.addRule(directoryNodesMustMatchRepositoryStructureRule);
+  engine.addRule(internalImportsMustResolveRule023);
+  engine.addRule(importBoundaryEnforcementRule024);
+
   return engine.verify({
     files: repository.files.map((file) => file.path),
+    imports: repository.files
+      .filter((file) => file.imports && file.imports.length > 0)
+      .map((file) => ({
+        path: file.path,
+        specifiers: file.imports!
+      })),
+    architectureImportBoundaries,
     graph
   });
 }

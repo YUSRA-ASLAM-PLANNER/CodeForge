@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.containsEdgesMustMatchPathsRule022 = exports.directoryNodesMustMatchRepositoryStructureRule = exports.fileNodesMustMatchRepositoryFilesRule = exports.containsEdgesMustMatchPathsRule = exports.containsEdgesMustPointParentToChildRule = exports.fileNodesRequireParentRule = exports.directoryNodesRequireParentRule = exports.directoryNodesRequireValidPathsRule = exports.repositoryContainsAllTopLevelFilesRule = exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+exports.importBoundaryEnforcementRule024 = exports.internalImportsMustResolveRule023 = exports.containsEdgesMustMatchPathsRule022 = exports.directoryNodesMustMatchRepositoryStructureRule = exports.fileNodesMustMatchRepositoryFilesRule = exports.containsEdgesMustMatchPathsRule = exports.containsEdgesMustPointParentToChildRule = exports.fileNodesRequireParentRule = exports.directoryNodesRequireParentRule = exports.directoryNodesRequireValidPathsRule = exports.repositoryContainsAllTopLevelFilesRule = exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -180,7 +180,7 @@ exports.repositoryNodeRequiredRule = {
         }
         return [
             {
-                ruleId: "ARCH-007",
+                ruleId: "ARCH-008",
                 severity: "error",
                 message: repositoryNodes.length === 0
                     ? "Context graph is missing the repository node"
@@ -590,6 +590,149 @@ exports.containsEdgesMustMatchPathsRule022 = {
                         target: `${edge.from}->${edge.to}`
                     });
                 }
+            }
+        }
+        return violations;
+    }
+};
+exports.internalImportsMustResolveRule023 = {
+    id: "ARCH-023",
+    description: "Internal relative imports must resolve to existing repository files",
+    severity: "error",
+    check: (context) => {
+        const violations = [];
+        const graphFilePaths = new Set(context.graph.nodes
+            .filter((node) => node.kind === "file" && node.id.startsWith("file:"))
+            .map((node) => node.id.slice("file:".length).replace(/\\/g, "/")));
+        const normalize = (value) => value.replace(/\\/g, "/").replace(/^\.\/+/, "");
+        for (const entry of context.imports ?? []) {
+            for (const specifier of entry.specifiers) {
+                if (!specifier.startsWith(".")) {
+                    continue;
+                }
+                const parts = normalize(entry.path).split("/");
+                parts.pop();
+                let escapesRoot = false;
+                for (const part of specifier.replace(/\\/g, "/").split("/")) {
+                    if (!part || part === ".")
+                        continue;
+                    if (part === "..") {
+                        if (parts.length === 0) {
+                            escapesRoot = true;
+                            break;
+                        }
+                        parts.pop();
+                    }
+                    else {
+                        parts.push(part);
+                    }
+                }
+                if (escapesRoot)
+                    continue;
+                const basePath = parts.join("/");
+                const candidates = [
+                    basePath,
+                    `${basePath}.ts`,
+                    `${basePath}.tsx`,
+                    `${basePath}.js`,
+                    `${basePath}.jsx`,
+                    `${basePath}.mts`,
+                    `${basePath}.cts`,
+                    `${basePath}.mjs`,
+                    `${basePath}.cjs`,
+                    `${basePath}/index.ts`,
+                    `${basePath}/index.tsx`,
+                    `${basePath}/index.js`,
+                    `${basePath}/index.jsx`
+                ].map(normalize);
+                if (candidates.some((candidate) => graphFilePaths.has(candidate))) {
+                    continue;
+                }
+                violations.push({
+                    ruleId: "ARCH-023",
+                    severity: "error",
+                    message: `Unresolved internal import: ${specifier}`,
+                    target: `${entry.path}->${specifier}`
+                });
+            }
+        }
+        return violations;
+    }
+};
+exports.importBoundaryEnforcementRule024 = {
+    id: "ARCH-024",
+    description: "Imports must not cross explicitly prohibited architectural boundaries",
+    severity: "error",
+    check: (context) => {
+        const violations = [];
+        const boundaries = context.architectureImportBoundaries ?? [];
+        if (boundaries.length === 0)
+            return violations;
+        const normalize = (value) => value.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\.\/+/, "");
+        const getLayer = (filePath) => {
+            const parts = normalize(filePath).split("/");
+            for (const part of parts) {
+                for (const boundary of boundaries) {
+                    if (boundary.from.toLowerCase() === part.toLowerCase()) {
+                        return boundary.from;
+                    }
+                    if (boundary.to.toLowerCase() === part.toLowerCase()) {
+                        return boundary.to;
+                    }
+                }
+            }
+            return undefined;
+        };
+        const reported = new Set();
+        const checkImport = (sourcePath, targetPath) => {
+            sourcePath = normalize(sourcePath);
+            targetPath = normalize(targetPath);
+            const sourceLayer = getLayer(sourcePath);
+            const targetLayer = getLayer(targetPath);
+            if (!sourceLayer || !targetLayer)
+                return;
+            const prohibited = boundaries.find((boundary) => boundary.from.toLowerCase() === sourceLayer.toLowerCase() &&
+                boundary.to.toLowerCase() === targetLayer.toLowerCase());
+            if (!prohibited)
+                return;
+            const key = `${sourcePath}->${targetPath}:${prohibited.from}:${prohibited.to}`;
+            if (reported.has(key))
+                return;
+            reported.add(key);
+            violations.push({
+                ruleId: "ARCH-024",
+                severity: "error",
+                message: `Architectural boundary violation: ${prohibited.from} must not import ${prohibited.to}`,
+                target: `${sourcePath}->${targetPath}`
+            });
+        };
+        // Check resolved graph edges, including path-alias imports.
+        for (const edge of context.graph.edges) {
+            if (edge.kind !== "imports")
+                continue;
+            if (!edge.from.startsWith("file:") || !edge.to.startsWith("file:"))
+                continue;
+            checkImport(edge.from.slice("file:".length), edge.to.slice("file:".length));
+        }
+        // Also check raw relative imports for contexts without graph edges.
+        for (const entry of context.imports ?? []) {
+            for (const specifier of entry.specifiers) {
+                if (!specifier.startsWith("."))
+                    continue;
+                const parts = normalize(entry.path).split("/");
+                parts.pop();
+                for (const part of normalize(specifier).split("/")) {
+                    if (!part || part === ".")
+                        continue;
+                    if (part === "..") {
+                        if (parts.length > 0)
+                            parts.pop();
+                    }
+                    else {
+                        parts.push(part);
+                    }
+                }
+                checkImport(entry.path, parts.join("/"));
             }
         }
         return violations;

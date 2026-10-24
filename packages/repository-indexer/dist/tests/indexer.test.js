@@ -30,3 +30,53 @@ const indexer_1 = require("../src/indexer");
     const snapshot = await (0, indexer_1.indexRepository)(root);
     strict_1.default.deepEqual(snapshot.files.map((file) => file.path), ["a.ts", "m.ts", "z.ts"]);
 });
+(0, node_test_1.default)("detects static, re-export, and dynamic imports", async () => {
+    const root = await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "codeforge-imports-"));
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "main.ts"), [
+        'import { helper } from "./helper";',
+        'export { value } from "./values";',
+        'const lazy = import("./lazy");',
+        "const result = helper;"
+    ].join("\n"));
+    const snapshot = await (0, indexer_1.indexRepository)(root);
+    const mainFile = snapshot.files.find((file) => file.path === "main.ts");
+    strict_1.default.ok(mainFile);
+    strict_1.default.deepEqual(mainFile.imports, [
+        "./helper",
+        "./lazy",
+        "./values"
+    ]);
+});
+(0, node_test_1.default)("preserves TypeScript path alias import specifiers", async () => {
+    const root = await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "codeforge-alias-"));
+    await (0, promises_1.mkdir)((0, node_path_1.join)(root, "src", "database"), { recursive: true });
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "tsconfig.json"), JSON.stringify({
+        compilerOptions: {
+            baseUrl: ".",
+            paths: {
+                "@database/*": ["src/database/*"]
+            }
+        }
+    }));
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "database", "query.ts"), "export const query = () => true;");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "index.ts"), 'import { query } from "@database/query";\nexport { query };');
+    const snapshot = await (0, indexer_1.indexRepository)(root);
+    const indexFile = snapshot.files.find((file) => file.path === "src/index.ts");
+    strict_1.default.ok(indexFile);
+    strict_1.default.deepEqual(indexFile.imports, ["@database/query"]);
+    strict_1.default.deepEqual(indexFile.resolvedImports, ["src/database/query.ts"]);
+});
+(0, node_test_1.default)("continues to detect relative imports alongside aliases", async () => {
+    const root = await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "codeforge-mixed-imports-"));
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "main.ts"), [
+        'import { helper } from "./helper";',
+        'import { query } from "@database/query";'
+    ].join("\n"));
+    const snapshot = await (0, indexer_1.indexRepository)(root);
+    const mainFile = snapshot.files.find((file) => file.path === "main.ts");
+    strict_1.default.ok(mainFile);
+    strict_1.default.deepEqual(mainFile.imports, [
+        "./helper",
+        "@database/query"
+    ]);
+});

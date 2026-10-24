@@ -230,7 +230,7 @@ export const repositoryNodeRequiredRule: VerificationRule = {
 
     return [
       {
-        ruleId: "ARCH-007",
+        ruleId: "ARCH-008",
         severity: "error",
         message:
           repositoryNodes.length === 0
@@ -789,6 +789,182 @@ export const containsEdgesMustMatchPathsRule022: VerificationRule = {
             target: `${edge.from}->${edge.to}`
           });
         }
+      }
+    }
+
+    return violations;
+  }
+};
+
+export const internalImportsMustResolveRule023: VerificationRule = {
+  id: "ARCH-023",
+  description: "Internal relative imports must resolve to existing repository files",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const violations: VerificationViolation[] = [];
+    const graphFilePaths = new Set(
+      context.graph.nodes
+        .filter((node) => node.kind === "file" && node.id.startsWith("file:"))
+        .map((node) => node.id.slice("file:".length).replace(/\\/g, "/"))
+    );
+
+    const normalize = (value: string): string =>
+      value.replace(/\\/g, "/").replace(/^\.\/+/, "");
+
+    for (const entry of context.imports ?? []) {
+      for (const specifier of entry.specifiers) {
+        if (!specifier.startsWith(".")) {
+          continue;
+        }
+
+        const parts = normalize(entry.path).split("/");
+        parts.pop();
+
+        let escapesRoot = false;
+
+        for (const part of specifier.replace(/\\/g, "/").split("/")) {
+          if (!part || part === ".") continue;
+
+          if (part === "..") {
+            if (parts.length === 0) {
+              escapesRoot = true;
+              break;
+            }
+            parts.pop();
+          } else {
+            parts.push(part);
+          }
+        }
+
+        if (escapesRoot) continue;
+
+        const basePath = parts.join("/");
+        const candidates = [
+          basePath,
+          `${basePath}.ts`,
+          `${basePath}.tsx`,
+          `${basePath}.js`,
+          `${basePath}.jsx`,
+          `${basePath}.mts`,
+          `${basePath}.cts`,
+          `${basePath}.mjs`,
+          `${basePath}.cjs`,
+          `${basePath}/index.ts`,
+          `${basePath}/index.tsx`,
+          `${basePath}/index.js`,
+          `${basePath}/index.jsx`
+        ].map(normalize);
+
+        if (candidates.some((candidate) => graphFilePaths.has(candidate))) {
+          continue;
+        }
+
+        violations.push({
+          ruleId: "ARCH-023",
+          severity: "error",
+          message: `Unresolved internal import: ${specifier}`,
+          target: `${entry.path}->${specifier}`
+        });
+      }
+    }
+
+    return violations;
+  }
+};
+
+export const importBoundaryEnforcementRule024: VerificationRule = {
+  id: "ARCH-024",
+  description: "Imports must not cross explicitly prohibited architectural boundaries",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const violations: VerificationViolation[] = [];
+    const boundaries = context.architectureImportBoundaries ?? [];
+
+    if (boundaries.length === 0) return violations;
+
+    const normalize = (value: string): string =>
+      value.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\.\/+/, "");
+
+    const getLayer = (filePath: string): string | undefined => {
+      const parts = normalize(filePath).split("/");
+
+      for (const part of parts) {
+        for (const boundary of boundaries) {
+          if (boundary.from.toLowerCase() === part.toLowerCase()) {
+            return boundary.from;
+          }
+          if (boundary.to.toLowerCase() === part.toLowerCase()) {
+            return boundary.to;
+          }
+        }
+      }
+
+      return undefined;
+    };
+
+    const reported = new Set<string>();
+
+    const checkImport = (sourcePath: string, targetPath: string): void => {
+      sourcePath = normalize(sourcePath);
+      targetPath = normalize(targetPath);
+
+      const sourceLayer = getLayer(sourcePath);
+      const targetLayer = getLayer(targetPath);
+
+      if (!sourceLayer || !targetLayer) return;
+
+      const prohibited = boundaries.find(
+        (boundary) =>
+          boundary.from.toLowerCase() === sourceLayer.toLowerCase() &&
+          boundary.to.toLowerCase() === targetLayer.toLowerCase()
+      );
+
+      if (!prohibited) return;
+
+      const key = `${sourcePath}->${targetPath}:${prohibited.from}:${prohibited.to}`;
+      if (reported.has(key)) return;
+      reported.add(key);
+
+      violations.push({
+        ruleId: "ARCH-024",
+        severity: "error",
+        message: `Architectural boundary violation: ${prohibited.from} must not import ${prohibited.to}`,
+        target: `${sourcePath}->${targetPath}`
+      });
+    };
+
+    // Check resolved graph edges, including path-alias imports.
+    for (const edge of context.graph.edges) {
+      if (edge.kind !== "imports") continue;
+      if (!edge.from.startsWith("file:") || !edge.to.startsWith("file:")) continue;
+
+      checkImport(
+        edge.from.slice("file:".length),
+        edge.to.slice("file:".length)
+      );
+    }
+
+    // Also check raw relative imports for contexts without graph edges.
+    for (const entry of context.imports ?? []) {
+      for (const specifier of entry.specifiers) {
+        if (!specifier.startsWith(".")) continue;
+
+        const parts = normalize(entry.path).split("/");
+        parts.pop();
+
+        for (const part of normalize(specifier).split("/")) {
+          if (!part || part === ".") continue;
+
+          if (part === "..") {
+            if (parts.length > 0) parts.pop();
+          } else {
+            parts.push(part);
+          }
+        }
+
+        checkImport(entry.path, parts.join("/"));
       }
     }
 

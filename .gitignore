@@ -1,1 +1,5 @@
 node_modules/
+
+# Generated build output
+packages/*/dist/
+packages/*/dist-tests/

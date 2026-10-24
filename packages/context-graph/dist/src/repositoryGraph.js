@@ -3,6 +3,42 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildContextGraph = buildContextGraph;
 exports.buildContextGraphFromSnapshot = buildContextGraphFromSnapshot;
 const builder_1 = require("./builder");
+const RESOLVABLE_EXTENSIONS = [
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mts",
+    ".cts",
+    ".mjs",
+    ".cjs"
+];
+function resolveInternalImport(importerPath, importSpecifier, knownPaths) {
+    if (!importSpecifier.startsWith(".")) {
+        return undefined;
+    }
+    const parts = importerPath.split("/");
+    parts.pop();
+    for (const part of importSpecifier.replace(/\\/g, "/").split("/")) {
+        if (!part || part === ".")
+            continue;
+        if (part === "..") {
+            if (parts.length === 0)
+                return undefined;
+            parts.pop();
+        }
+        else {
+            parts.push(part);
+        }
+    }
+    const resolvedPath = parts.join("/");
+    const candidates = [
+        resolvedPath,
+        ...RESOLVABLE_EXTENSIONS.map((extension) => `${resolvedPath}${extension}`),
+        ...RESOLVABLE_EXTENSIONS.map((extension) => `${resolvedPath}/index${extension}`)
+    ];
+    return candidates.find((candidate) => knownPaths.has(candidate));
+}
 function buildContextGraph(files) {
     const graph = new builder_1.ContextGraphBuilder();
     graph.addNode("repository:root", "repository", "CodeForge");
@@ -37,6 +73,31 @@ function buildContextGraph(files) {
         else {
             const parentDirectory = file.path.slice(0, lastSlash);
             graph.addEdge(`directory:${parentDirectory}`, id, "contains");
+        }
+    }
+    const knownPaths = new Set(files.map((file) => file.path));
+    const importEdges = new Set();
+    for (const file of files) {
+        const targets = new Set();
+        for (const importSpecifier of file.imports ?? []) {
+            const targetPath = resolveInternalImport(file.path, importSpecifier, knownPaths);
+            if (targetPath) {
+                targets.add(targetPath);
+            }
+        }
+        for (const resolvedPath of file.resolvedImports ?? []) {
+            if (knownPaths.has(resolvedPath)) {
+                targets.add(resolvedPath);
+            }
+        }
+        for (const targetPath of targets) {
+            if (targetPath === file.path)
+                continue;
+            const edgeKey = `${file.path}->${targetPath}`;
+            if (importEdges.has(edgeKey))
+                continue;
+            importEdges.add(edgeKey);
+            graph.addEdge(`file:${file.path}`, `file:${targetPath}`, "imports");
         }
     }
     return graph.build();

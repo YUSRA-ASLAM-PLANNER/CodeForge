@@ -1,4 +1,8 @@
 export type VerificationSeverity = "info" | "warning" | "error";
+export type ArchitectureImportBoundary = {
+    from: string;
+    to: string;
+};
 export type VerificationRule = {
     id: string;
     description: string;
@@ -7,6 +11,11 @@ export type VerificationRule = {
 };
 export type VerificationContext = {
     files: string[];
+    imports?: Array<{
+        path: string;
+        specifiers: string[];
+    }>;
+    architectureImportBoundaries?: ArchitectureImportBoundary[];
     graph: {
         nodes: Array<{
             id: string;
