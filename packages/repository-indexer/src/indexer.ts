@@ -1,4 +1,3 @@
-
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, extname, resolve, dirname } from "node:path";
 import ts from "typescript";
@@ -8,7 +7,10 @@ const DEFAULT_IGNORED_DIRECTORIES = new Set([
   ".git",
   "node_modules",
   "dist",
-  "dist-tests"
+  "dist-tests",
+  "__pycache__",
+  ".venv",
+  "venv"
 ]);
 
 const SOURCE_EXTENSIONS = new Set([
@@ -19,10 +21,12 @@ const SOURCE_EXTENSIONS = new Set([
   ".mts",
   ".cts",
   ".mjs",
-  ".cjs"
+  ".cjs",
+  ".py",
+  ".pyi"
 ]);
 
-const RESOLVABLE_EXTENSIONS = [
+const TYPESCRIPT_EXTENSIONS = [
   ".ts",
   ".tsx",
   ".js",
@@ -34,7 +38,17 @@ const RESOLVABLE_EXTENSIONS = [
   ".d.ts"
 ];
 
-function extractImports(source: string, filePath: string): string[] {
+const PYTHON_EXTENSIONS = [".py", ".pyi"];
+
+const RESOLVABLE_EXTENSIONS = [
+  ...TYPESCRIPT_EXTENSIONS,
+  ...PYTHON_EXTENSIONS
+];
+
+function extractTypeScriptImports(
+  source: string,
+  filePath: string
+): string[] {
   const extension = extname(filePath);
 
   const scriptKind =
@@ -81,7 +95,184 @@ function extractImports(source: string, filePath: string): string[] {
   return [...imports].sort((a, b) => a.localeCompare(b));
 }
 
-function toRepositoryPath(rootPath: string, absolutePath: string): string {
+function stripPythonComments(source: string): string {
+  let result = "";
+  let quote: "'" | '"' | null = null;
+  let tripleQuoted = false;
+  let escaped = false;
+  let inComment = false;
+
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    const nextThree = source.slice(i, i + 3);
+
+    if (inComment) {
+      if (char === "\n") {
+        result += char;
+        inComment = false;
+      }
+      continue;
+    }
+
+    if (quote !== null) {
+      if (escaped) {
+        result += char;
+        escaped = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        result += char;
+        escaped = true;
+        continue;
+      }
+
+      if (tripleQuoted && nextThree === quote.repeat(3)) {
+        result += nextThree;
+        i += 2;
+        quote = null;
+        tripleQuoted = false;
+        continue;
+      }
+
+      if (!tripleQuoted && char === quote) {
+        result += char;
+        quote = null;
+        continue;
+      }
+
+      result += char;
+      continue;
+    }
+
+    if (char === "#") {
+      inComment = true;
+      continue;
+    }
+
+    if (nextThree === "'''" || nextThree === '"""') {
+      quote = char as "'" | '"';
+      tripleQuoted = true;
+      result += nextThree;
+      i += 2;
+      continue;
+    }
+
+    if (char === "'" || char === '"') {
+      quote = char;
+      tripleQuoted = false;
+      result += char;
+      continue;
+    }
+
+    result += char;
+  }
+
+  return result;
+}
+
+function normalizePythonImports(source: string): string {
+  return stripPythonComments(source)
+    .replace(/\\\r?\n/g, "")
+    .replace(
+      /(\bfrom\s+[.\w]+\s+import\s*)\(\s*([\s\S]*?)\s*\)/g,
+      (_match, prefix: string, importedNames: string) =>
+        `${prefix}${importedNames.replace(/\r?\n/g, " ")}`
+    );
+}
+
+function extractPythonImports(source: string): string[] {
+  const imports = new Set<string>();
+  const normalizedSource = normalizePythonImports(source);
+
+  const importPattern =
+    /^\s*import\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?:\s*,\s*[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)*)/gm;
+
+  const fromImportPattern =
+    /^\s*from\s+([.]*[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*|\.{1,})\s+import\s+(.+)$/gm;
+
+  for (const match of normalizedSource.matchAll(importPattern)) {
+    const names = match[1]
+      .split(",")
+      .map((name) => name.trim().split(/\s+as\s+/)[0]);
+
+    for (const name of names) {
+      if (name) imports.add(name);
+    }
+  }
+
+  for (const match of normalizedSource.matchAll(fromImportPattern)) {
+    const moduleName = match[1];
+    const importedNames = match[2];
+
+    imports.add(moduleName);
+
+    if (moduleName.startsWith(".")) {
+      for (const item of importedNames.split(",")) {
+        const name = item.trim().split(/\s+as\s+/)[0];
+
+        if (name && /^[A-Za-z_]\w*$/.test(name)) {
+          imports.add(
+            /^\.+$/.test(moduleName)
+              ? `${moduleName}${name}`
+              : `${moduleName}.${name}`
+          );
+        }
+      }
+    }
+  }
+
+  return [...imports].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Finds individual Python submodules imported using a single-line
+ * absolute import, without adding them to RepositoryFile.imports.
+ *
+ * Example:
+ * from src.services import helper, utils
+ *
+ * Parenthesized multiline imports are excluded because the indexer
+ * treats those as package-level imports for its existing behavior.
+ */
+function extractPythonImportedModuleCandidates(
+  source: string
+): string[] {
+  const candidates = new Set<string>();
+  const normalizedSource = normalizePythonImports(source);
+
+  const fromImportPattern =
+    /^\s*from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s+import\s+(.+)$/gm;
+
+  for (const match of normalizedSource.matchAll(fromImportPattern)) {
+    const moduleName = match[1];
+    const importedNames = match[2];
+
+    for (const item of importedNames.split(",")) {
+      const name = item.trim().split(/\s+as\s+/)[0];
+
+      if (name && /^[A-Za-z_]\w*$/.test(name)) {
+        candidates.add(`${moduleName}.${name}`);
+      }
+    }
+  }
+
+  return [...candidates].sort((a, b) => a.localeCompare(b));
+}
+function extractImports(source: string, filePath: string): string[] {
+  const extension = extname(filePath);
+
+  if (extension === ".py" || extension === ".pyi") {
+    return extractPythonImports(source);
+  }
+
+  return extractTypeScriptImports(source, filePath);
+}
+
+function toRepositoryPath(
+  rootPath: string,
+  absolutePath: string
+): string {
   return relative(rootPath, absolutePath).replace(/\\/g, "/");
 }
 
@@ -98,15 +289,16 @@ function findExistingSourcePath(
     ),
     ...RESOLVABLE_EXTENSIONS.map(
       (extension) => join(normalizedCandidate, `index${extension}`)
+    ),
+    ...PYTHON_EXTENSIONS.map(
+      (extension) => join(normalizedCandidate, `__init__${extension}`)
     )
   ];
 
   for (const candidate of candidates) {
     const repositoryPath = knownAbsolutePaths.get(resolve(candidate));
 
-    if (repositoryPath) {
-      return repositoryPath;
-    }
+    if (repositoryPath) return repositoryPath;
   }
 
   return undefined;
@@ -119,16 +311,13 @@ function resolvePathAlias(
   compilerOptions: ts.CompilerOptions,
   knownAbsolutePaths: Map<string, string>
 ): string | undefined {
-  const configDirectory = rootPath;
   const paths = compilerOptions.paths;
 
-  if (!paths) {
-    return undefined;
-  }
+  if (!paths) return undefined;
 
   const baseUrl = compilerOptions.baseUrl
-    ? resolve(configDirectory, compilerOptions.baseUrl)
-    : configDirectory;
+    ? resolve(rootPath, compilerOptions.baseUrl)
+    : rootPath;
 
   const matchingPatterns = Object.keys(paths)
     .map((pattern) => {
@@ -154,7 +343,8 @@ function resolvePathAlias(
       entry.wildcard
         ? importSpecifier.startsWith(entry.prefix) &&
           importSpecifier.endsWith(entry.suffix) &&
-          importSpecifier.length >= entry.prefix.length + entry.suffix.length
+          importSpecifier.length >=
+            entry.prefix.length + entry.suffix.length
         : importSpecifier === entry.pattern
     )
     .sort((a, b) => b.prefix.length - a.prefix.length);
@@ -168,27 +358,21 @@ function resolvePathAlias(
       : "";
 
     for (const target of paths[entry.pattern] ?? []) {
-      const substitutedTarget = target.replace("*", matchedText);
-      const targetBase = compilerOptions.baseUrl
-        ? baseUrl
-        : dirname(join(rootPath, "tsconfig.json"));
-
-      const candidatePath = resolve(targetBase, substitutedTarget);
+      const candidatePath = resolve(
+        baseUrl,
+        target.replace("*", matchedText)
+      );
 
       const resolved = findExistingSourcePath(
         candidatePath,
         knownAbsolutePaths
       );
 
-      if (resolved) {
-        return resolved;
-      }
+      if (resolved) return resolved;
     }
   }
 
-  // Keep the parameter available for future support of tsconfig inheritance.
   void importerAbsolutePath;
-
   return undefined;
 }
 
@@ -199,6 +383,37 @@ function resolveImportPath(
   compilerOptions: ts.CompilerOptions,
   knownAbsolutePaths: Map<string, string>
 ): string | undefined {
+  const importerExtension = extname(importerAbsolutePath);
+
+  if (importerExtension === ".py" || importerExtension === ".pyi") {
+    const importerDirectory = dirname(importerAbsolutePath);
+
+    if (importSpecifier.startsWith(".")) {
+      let dots = 0;
+
+      while (importSpecifier[dots] === ".") {
+        dots++;
+      }
+
+      let targetDirectory = importerDirectory;
+
+      for (let i = 1; i < dots; i++) {
+        targetDirectory = dirname(targetDirectory);
+      }
+
+      const moduleName = importSpecifier.slice(dots);
+      const modulePath = moduleName
+        ? join(targetDirectory, ...moduleName.split("."))
+        : targetDirectory;
+
+      return findExistingSourcePath(modulePath, knownAbsolutePaths);
+    }
+
+    const modulePath = resolve(rootPath, ...importSpecifier.split("."));
+
+    return findExistingSourcePath(modulePath, knownAbsolutePaths);
+  }
+
   if (importSpecifier.startsWith(".")) {
     return findExistingSourcePath(
       resolve(dirname(importerAbsolutePath), importSpecifier),
@@ -224,9 +439,7 @@ async function loadCompilerOptions(
     "tsconfig.json"
   );
 
-  if (!configPath) {
-    return {};
-  }
+  if (!configPath) return {};
 
   const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
 
@@ -256,7 +469,6 @@ export async function indexRepository(
 ): Promise<RepositorySnapshot> {
   const absoluteRootPath = resolve(rootPath);
   const files: RepositoryFile[] = [];
-  const absoluteSourcePaths: string[] = [];
 
   async function walk(currentPath: string): Promise<void> {
     const entries = await readdir(currentPath, { withFileTypes: true });
@@ -273,9 +485,7 @@ export async function indexRepository(
         continue;
       }
 
-      if (!entry.isFile()) {
-        continue;
-      }
+      if (!entry.isFile()) continue;
 
       const fileStat = await stat(fullPath);
       const extension = extname(entry.name);
@@ -290,7 +500,6 @@ export async function indexRepository(
       if (SOURCE_EXTENSIONS.has(extension)) {
         const source = await readFile(fullPath, "utf8");
         file.imports = extractImports(source, path);
-        absoluteSourcePaths.push(resolve(fullPath));
       }
 
       files.push(file);
@@ -304,9 +513,7 @@ export async function indexRepository(
   const knownAbsolutePaths = new Map<string, string>();
 
   for (const file of files) {
-    if (!SOURCE_EXTENSIONS.has(file.extension)) {
-      continue;
-    }
+    if (!SOURCE_EXTENSIONS.has(file.extension)) continue;
 
     knownAbsolutePaths.set(
       resolve(absoluteRootPath, file.path),
@@ -333,12 +540,33 @@ export async function indexRepository(
           knownAbsolutePaths
         )
       )
-      .filter((path): path is string => Boolean(path))
-      .filter((path) => path !== file.path);
+      .filter((path): path is string => Boolean(path));
 
-    file.resolvedImports = [...new Set(resolvedImports)].sort(
-      (a, b) => a.localeCompare(b)
-    );
+    let additionalResolvedImports: string[] = [];
+
+    if (file.extension === ".py" || file.extension === ".pyi") {
+      const source = await readFile(importerAbsolutePath, "utf8");
+
+      additionalResolvedImports =
+        extractPythonImportedModuleCandidates(source)
+          .map((specifier) =>
+            resolveImportPath(
+              specifier,
+              importerAbsolutePath,
+              absoluteRootPath,
+              compilerOptions,
+              knownAbsolutePaths
+            )
+          )
+          .filter((path): path is string => Boolean(path));
+    }
+
+    file.resolvedImports = [
+      ...new Set([
+        ...resolvedImports,
+        ...additionalResolvedImports
+      ])
+    ].sort((a, b) => a.localeCompare(b));
   }
 
   return {

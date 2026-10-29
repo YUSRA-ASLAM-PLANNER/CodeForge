@@ -6,11 +6,11 @@ import * as path from "path";
 import {
   authenticateEvidence,
   computeEvidenceIntegrityIdentifier,
-} from "../src/canonicalization/evidenceIntegrity";
-import { DEFAULT_CANONICALIZATION_POLICY } from "../src/canonicalization/policy";
-import { IntegrityMismatchError, WalCorruptionError, TamperDetectedError } from "../src/errors";
-import { WriteAheadLog } from "../src/persistence/wal";
-import type { ConformanceFinding, ObservedEvidence } from "../src/domain/models";
+} from "../packages/evaluation-engine/src/canonicalization/evidenceIntegrity";
+import { DEFAULT_CANONICALIZATION_POLICY } from "../packages/evaluation-engine/src/canonicalization/policy";
+import { IntegrityMismatchError, WalCorruptionError, TamperDetectedError } from "../packages/evaluation-engine/src/errors";
+import { WriteAheadLog } from "../packages/evaluation-engine/src/persistence/wal";
+import type { ConformanceFinding, ObservedEvidence } from "../packages/evaluation-engine/src/domain/models";
 
 function tempFile(): string {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ch14-wal-")), "wal.jsonl");

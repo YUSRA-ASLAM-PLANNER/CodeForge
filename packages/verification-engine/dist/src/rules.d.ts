@@ -23,3 +23,4 @@ export declare const directoryNodesMustMatchRepositoryStructureRule: Verificatio
 export declare const containsEdgesMustMatchPathsRule022: VerificationRule;
 export declare const internalImportsMustResolveRule023: VerificationRule;
 export declare const importBoundaryEnforcementRule024: VerificationRule;
+export declare const circularDependencyDetectionRule026: VerificationRule;

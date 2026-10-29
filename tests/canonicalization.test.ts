@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import {
   canonicalizeValue,
   canonicalJsonStringify,
-} from "../src/canonicalization/canonicalizer";
+} from "../packages/evaluation-engine/src/canonicalization/canonicalizer";
 import {
   resolvePathSemantics,
   toWildcardPath,
   DEFAULT_CANONICALIZATION_POLICY,
   type CanonicalizationPolicy,
-} from "../src/canonicalization/policy";
-import type { JsonValue } from "../src/domain/models";
+} from "../packages/evaluation-engine/src/canonicalization/policy";
+import type { JsonValue } from "../packages/evaluation-engine/src/domain/models";
 
 test("object key ordering: keys are sorted deterministically", () => {
   const value: JsonValue = { z: 1, a: 2, m: 3 };

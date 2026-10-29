@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateSchema } from "../src/validation/schemaValidator";
-import { SchemaValidationError } from "../src/errors";
+import { validateSchema } from "../packages/evaluation-engine/src/validation/schemaValidator";
+import { SchemaValidationError } from "../packages/evaluation-engine/src/errors";
 import { baseContext, clone, mutable } from "./fixtures";
 
 test("schema: valid minimal context passes", () => {

@@ -407,6 +407,13 @@ export const repositoryContainsAllTopLevelFilesRule: VerificationRule = {
         continue;
       }
 
+      const filePath = (node.path ?? node.id.slice("file:".length))
+        .replace(/\\/g, "/");
+
+      if (filePath.includes("/")) {
+        continue;
+      }
+
       if (!repositoryContainsEdges.has(node.id)) {
         violations.push({
           ruleId: "ARCH-014",
@@ -966,6 +973,103 @@ export const importBoundaryEnforcementRule024: VerificationRule = {
 
         checkImport(entry.path, parts.join("/"));
       }
+    }
+
+    return violations;
+  }
+};
+
+export const circularDependencyDetectionRule026: VerificationRule = {
+  id: "ARCH-026",
+  description: "Detect circular dependencies between repository files",
+  severity: "error",
+
+  check: (context): VerificationViolation[] => {
+    const adjacency = new Map<string, string[]>();
+
+    for (const edge of context.graph.edges) {
+      if (edge.kind !== "imports") continue;
+      if (!edge.from.startsWith("file:")) continue;
+      if (!edge.to.startsWith("file:")) continue;
+
+      const source = edge.from.slice("file:".length);
+      const target = edge.to.slice("file:".length);
+
+      const targets = adjacency.get(source) ?? [];
+      targets.push(target);
+      adjacency.set(source, targets);
+    }
+
+    const allFiles = new Set<string>();
+
+    for (const node of context.graph.nodes) {
+      if (node.kind === "file" && node.id.startsWith("file:")) {
+        allFiles.add(node.id.slice("file:".length));
+      }
+    }
+
+    for (const [source, targets] of adjacency) {
+      allFiles.add(source);
+      for (const target of targets) allFiles.add(target);
+    }
+
+    let nextIndex = 0;
+    const indices = new Map<string, number>();
+    const lowLinks = new Map<string, number>();
+    const stack: string[] = [];
+    const onStack = new Set<string>();
+    const violations: VerificationViolation[] = [];
+
+    const strongConnect = (file: string): void => {
+      indices.set(file, nextIndex);
+      lowLinks.set(file, nextIndex);
+      nextIndex++;
+
+      stack.push(file);
+      onStack.add(file);
+
+      for (const dependency of adjacency.get(file) ?? []) {
+        if (!indices.has(dependency)) {
+          strongConnect(dependency);
+          lowLinks.set(
+            file,
+            Math.min(lowLinks.get(file)!, lowLinks.get(dependency)!)
+          );
+        } else if (onStack.has(dependency)) {
+          lowLinks.set(
+            file,
+            Math.min(lowLinks.get(file)!, indices.get(dependency)!)
+          );
+        }
+      }
+
+      if (lowLinks.get(file) !== indices.get(file)) return;
+
+      const component: string[] = [];
+      let member: string;
+
+      do {
+        member = stack.pop()!;
+        onStack.delete(member);
+        component.push(member);
+      } while (member !== file);
+
+      const hasSelfLoop = (adjacency.get(file) ?? []).includes(file);
+
+      if (component.length > 1 || hasSelfLoop) {
+        component.sort((a, b) => a.localeCompare(b));
+
+        violations.push({
+          ruleId: "ARCH-026",
+          severity: "error",
+       message: `Circular dependency detected between files: ${component.join(", ")}`,
+          target: component.join(", ")
+        });
+      }
+    };
+
+    for (const file of [...allFiles].sort((a, b) => a.localeCompare(b))) {
+      if (!indices.has(file)) strongConnect(file);
     }
 
     return violations;

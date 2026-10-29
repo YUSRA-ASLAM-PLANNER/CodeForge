@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateDomain } from "../src/validation/validator";
-import { ReferentialIntegrityError, ValidationError } from "../src/errors";
+import { validateDomain } from "../packages/evaluation-engine/src/validation/validator";
+import { ReferentialIntegrityError, ValidationError } from "../packages/evaluation-engine/src/errors";
 import { baseContext, clone, mutable } from "./fixtures";
 
 test("referential integrity: duplicate requirement id rejected", () => {

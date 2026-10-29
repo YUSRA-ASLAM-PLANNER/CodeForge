@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { constructFinding } from "../src/findings/finding";
-import { DEFAULT_CANONICALIZATION_POLICY } from "../src/canonicalization/policy";
-import type { ObservedEvidence } from "../src/domain/models";
+import { constructFinding } from "../packages/evaluation-engine/src/findings/finding";
+import { DEFAULT_CANONICALIZATION_POLICY } from "../packages/evaluation-engine/src/canonicalization/policy";
+import type { ObservedEvidence } from "../packages/evaluation-engine/src/domain/models";
 
 function baseEvidence(): ObservedEvidence {
   return {

@@ -54,3 +54,91 @@ const repositoryGraph_1 = require("../src/repositoryGraph");
         edge.to === "file:src/database/query.ts" &&
         edge.kind === "imports"));
 });
+(0, node_test_1.default)("creates import edges between Python files", () => {
+    const graph = (0, repositoryGraph_1.buildContextGraph)([
+        {
+            path: "src/main.py",
+            imports: ["src.helper"],
+            resolvedImports: ["src/helper.py"]
+        },
+        {
+            path: "src/helper.py",
+            imports: []
+        }
+    ]);
+    strict_1.default.ok(graph.edges.some((edge) => edge.from === "file:src/main.py" &&
+        edge.to === "file:src/helper.py" &&
+        edge.kind === "imports"));
+});
+(0, node_test_1.default)("creates import edges to Python package and stub files", () => {
+    const graph = (0, repositoryGraph_1.buildContextGraph)([
+        {
+            path: "src/main.py",
+            imports: [".models", "src.types"],
+            resolvedImports: [
+                "src/__init__.py",
+                "src/types.pyi"
+            ]
+        },
+        { path: "src/__init__.py", imports: [] },
+        { path: "src/types.pyi", imports: [] }
+    ]);
+    strict_1.default.ok(graph.edges.some((edge) => edge.from === "file:src/main.py" &&
+        edge.to === "file:src/__init__.py" &&
+        edge.kind === "imports"));
+    strict_1.default.ok(graph.edges.some((edge) => edge.from === "file:src/main.py" &&
+        edge.to === "file:src/types.pyi" &&
+        edge.kind === "imports"));
+});
+(0, node_test_1.default)("creates import edges for nested Python relative imports", () => {
+    const graph = (0, repositoryGraph_1.buildContextGraph)([
+        {
+            path: "src/features/main.py",
+            imports: ["..shared.helper"]
+        },
+        {
+            path: "src/shared/helper.py",
+            imports: []
+        }
+    ]);
+    strict_1.default.ok(graph.edges.some((edge) => edge.from === "file:src/features/main.py" &&
+        edge.to === "file:src/shared/helper.py" &&
+        edge.kind === "imports"));
+});
+(0, node_test_1.default)("automatically resolves absolute Python module imports", () => {
+    const graph = (0, repositoryGraph_1.buildContextGraph)([
+        {
+            path: "src/main.py",
+            imports: ["src.helper"]
+        },
+        {
+            path: "src/helper.py",
+            imports: []
+        }
+    ]);
+    strict_1.default.ok(graph.edges.some((edge) => edge.from === "file:src/main.py" &&
+        edge.to === "file:src/helper.py" &&
+        edge.kind === "imports"));
+});
+(0, node_test_1.default)("automatically resolves Python package and stub imports", () => {
+    const graph = (0, repositoryGraph_1.buildContextGraph)([
+        {
+            path: "src/main.py",
+            imports: [".models", "src.types"]
+        },
+        {
+            path: "src/models/__init__.py",
+            imports: []
+        },
+        {
+            path: "src/types.pyi",
+            imports: []
+        }
+    ]);
+    strict_1.default.ok(graph.edges.some((edge) => edge.from === "file:src/main.py" &&
+        edge.to === "file:src/models/__init__.py" &&
+        edge.kind === "imports"));
+    strict_1.default.ok(graph.edges.some((edge) => edge.from === "file:src/main.py" &&
+        edge.to === "file:src/types.pyi" &&
+        edge.kind === "imports"));
+});

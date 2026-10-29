@@ -28,6 +28,7 @@ function verifyRepository(repository, graph, architectureImportBoundaries = []) 
     engine.addRule(rules_1.directoryNodesMustMatchRepositoryStructureRule);
     engine.addRule(rules_1.internalImportsMustResolveRule023);
     engine.addRule(rules_1.importBoundaryEnforcementRule024);
+    engine.addRule(rules_1.circularDependencyDetectionRule026);
     return engine.verify({
         files: repository.files.map((file) => file.path),
         imports: repository.files

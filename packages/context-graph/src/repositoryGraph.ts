@@ -19,7 +19,9 @@ const RESOLVABLE_EXTENSIONS = [
   ".mts",
   ".cts",
   ".mjs",
-  ".cjs"
+  ".cjs",
+  ".py",
+  ".pyi"
 ];
 
 function resolveInternalImport(
@@ -27,14 +29,72 @@ function resolveInternalImport(
   importSpecifier: string,
   knownPaths: Set<string>
 ): string | undefined {
-  if (!importSpecifier.startsWith(".")) {
+  const normalizedSpecifier = importSpecifier.replace(/\\/g, "/");
+
+  // Python relative imports: from .helper import x
+  // or from ..shared import x
+  if (
+    importerPath.endsWith(".py") ||
+    importerPath.endsWith(".pyi")
+  ) {
+    if (normalizedSpecifier.startsWith(".")) {
+      const dots = normalizedSpecifier.match(/^\.+/)?.[0].length ?? 0;
+      const parts = importerPath.split("/");
+      parts.pop();
+
+      for (let i = 1; i < dots; i++) {
+        if (parts.length === 0) return undefined;
+        parts.pop();
+      }
+
+      const moduleName = normalizedSpecifier.slice(dots);
+      const resolvedPath = [
+        ...parts,
+        ...moduleName.split(".").filter(Boolean)
+      ].join("/");
+
+      const candidates = [
+        resolvedPath,
+        ...RESOLVABLE_EXTENSIONS.map(
+          (extension) => `${resolvedPath}${extension}`
+        ),
+        ...RESOLVABLE_EXTENSIONS.map(
+          (extension) => `${resolvedPath}/index${extension}`
+        ),
+        `${resolvedPath}/__init__.py`,
+        `${resolvedPath}/__init__.pyi`
+      ];
+
+      return candidates.find((candidate) => knownPaths.has(candidate));
+    }
+
+    // Absolute Python imports, such as src.helper.
+    const resolvedPath = normalizedSpecifier.replace(/\./g, "/");
+
+    const candidates = [
+      resolvedPath,
+      ...RESOLVABLE_EXTENSIONS.map(
+        (extension) => `${resolvedPath}${extension}`
+      ),
+      ...RESOLVABLE_EXTENSIONS.map(
+        (extension) => `${resolvedPath}/index${extension}`
+      ),
+      `${resolvedPath}/__init__.py`,
+      `${resolvedPath}/__init__.pyi`
+    ];
+
+    return candidates.find((candidate) => knownPaths.has(candidate));
+  }
+
+  // Existing TypeScript/JavaScript relative import handling.
+  if (!normalizedSpecifier.startsWith(".")) {
     return undefined;
   }
 
   const parts = importerPath.split("/");
   parts.pop();
 
-  for (const part of importSpecifier.replace(/\\/g, "/").split("/")) {
+  for (const part of normalizedSpecifier.split("/")) {
     if (!part || part === ".") continue;
 
     if (part === "..") {
@@ -122,9 +182,7 @@ export function buildContextGraph(files: GraphFile[]): ContextGraph {
         knownPaths
       );
 
-      if (targetPath) {
-        targets.add(targetPath);
-      }
+      if (targetPath) targets.add(targetPath);
     }
 
     for (const resolvedPath of file.resolvedImports ?? []) {

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { evaluateStructuredPredicate } from "../src/evaluation/predicates";
-import type { ObservedEvidence } from "../src/domain/models";
+import { evaluateStructuredPredicate } from "../packages/evaluation-engine/src/evaluation/predicates";
+import type { ObservedEvidence } from "../packages/evaluation-engine/src/domain/models";
 
 function evidence(id: string, payload: Record<string, unknown>): ObservedEvidence {
   return {

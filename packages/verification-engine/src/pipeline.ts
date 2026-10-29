@@ -23,7 +23,8 @@ import {
   fileNodesMustMatchRepositoryFilesRule,
   directoryNodesMustMatchRepositoryStructureRule,
   internalImportsMustResolveRule023,
-  importBoundaryEnforcementRule024
+  importBoundaryEnforcementRule024,
+  circularDependencyDetectionRule026
 } from "./rules";
 
 import type {
@@ -63,6 +64,7 @@ export function verifyRepository(
   engine.addRule(directoryNodesMustMatchRepositoryStructureRule);
   engine.addRule(internalImportsMustResolveRule023);
   engine.addRule(importBoundaryEnforcementRule024);
+  engine.addRule(circularDependencyDetectionRule026);
 
   return engine.verify({
     files: repository.files.map((file) => file.path),

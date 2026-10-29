@@ -80,3 +80,116 @@ const indexer_1 = require("../src/indexer");
         "@database/query"
     ]);
 });
+(0, node_test_1.default)("indexes Python files and extracts import statements", async () => {
+    const root = await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "codeforge-python-"));
+    await (0, promises_1.mkdir)((0, node_path_1.join)(root, "src"));
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "main.py"), "import os\nfrom src.helper import calculate\n");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "helper.py"), "def calculate():\n    return 1\n");
+    const snapshot = await (0, indexer_1.indexRepository)(root);
+    const mainFile = snapshot.files.find((file) => file.path === "src/main.py");
+    strict_1.default.ok(mainFile);
+    strict_1.default.equal(mainFile.extension, ".py");
+    strict_1.default.deepEqual(mainFile.imports, [
+        "os",
+        "src.helper"
+    ]);
+    strict_1.default.deepEqual(mainFile.resolvedImports, [
+        "src/helper.py"
+    ]);
+});
+(0, node_test_1.default)("resolves relative Python package imports", async () => {
+    const root = await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "codeforge-python-relative-"));
+    await (0, promises_1.mkdir)((0, node_path_1.join)(root, "src", "services"), { recursive: true });
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "__init__.py"), "");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "services", "__init__.py"), "");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "services", "main.py"), "from . import helper\n");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "services", "helper.py"), "def run():\n    return 1\n");
+    const snapshot = await (0, indexer_1.indexRepository)(root);
+    const mainFile = snapshot.files.find((file) => file.path === "src/services/main.py");
+    strict_1.default.ok(mainFile);
+    strict_1.default.deepEqual(mainFile.imports, [".", ".helper"]);
+    strict_1.default.deepEqual(mainFile.resolvedImports, [
+        "src/services/__init__.py",
+        "src/services/helper.py"
+    ]);
+});
+(0, node_test_1.default)("resolves Python imports from a parent package", async () => {
+    const root = await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "codeforge-python-parent-"));
+    await (0, promises_1.mkdir)((0, node_path_1.join)(root, "src", "services"), { recursive: true });
+    await (0, promises_1.mkdir)((0, node_path_1.join)(root, "src", "shared"), { recursive: true });
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "__init__.py"), "");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "services", "__init__.py"), "");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "shared", "__init__.py"), "");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "services", "main.py"), "from ..shared import utils\n");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "shared", "utils.py"), "def run():\n    return 1\n");
+    const snapshot = await (0, indexer_1.indexRepository)(root);
+    const mainFile = snapshot.files.find((file) => file.path === "src/services/main.py");
+    strict_1.default.ok(mainFile);
+    strict_1.default.deepEqual(mainFile.imports, ["..shared", "..shared.utils"]);
+    strict_1.default.deepEqual(mainFile.resolvedImports, [
+        "src/shared/__init__.py",
+        "src/shared/utils.py"
+    ]);
+});
+(0, node_test_1.default)("indexes Python stub files", async () => {
+    const root = await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "codeforge-python-stubs-"));
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "helper.pyi"), "def calculate() -> int: ...\n");
+    const snapshot = await (0, indexer_1.indexRepository)(root);
+    strict_1.default.ok(snapshot.files.some((file) => file.path === "helper.pyi"));
+});
+(0, node_test_1.default)("preserves Python self-imports in resolved imports", async () => {
+    const root = await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "codeforge-python-self-import-"));
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "main.py"), "import main\n");
+    const snapshot = await (0, indexer_1.indexRepository)(root);
+    const mainFile = snapshot.files.find((file) => file.path === "main.py");
+    strict_1.default.ok(mainFile);
+    strict_1.default.deepEqual(mainFile.imports, ["main"]);
+    strict_1.default.deepEqual(mainFile.resolvedImports, ["main.py"]);
+});
+(0, node_test_1.default)("extracts multiline Python imports", async () => {
+    const root = await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "codeforge-python-multiline-"));
+    await (0, promises_1.mkdir)((0, node_path_1.join)(root, "src", "services"), { recursive: true });
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "__init__.py"), "");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "services", "__init__.py"), "");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "services", "helper.py"), "");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "services", "utils.py"), "");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "main.py"), [
+        "from src.services import (",
+        "    helper,",
+        "    utils,",
+        ")"
+    ].join("\n"));
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "message.py"), 'message = "Issue #123"\n');
+    const snapshot = await (0, indexer_1.indexRepository)(root);
+    const mainFile = snapshot.files.find((file) => file.path === "src/main.py");
+    const messageFile = snapshot.files.find((file) => file.path === "src/message.py");
+    strict_1.default.ok(mainFile);
+    strict_1.default.deepEqual(mainFile.imports, ["src.services"]);
+    strict_1.default.deepEqual(mainFile.resolvedImports, [
+        "src/services/__init__.py",
+        "src/services/helper.py",
+        "src/services/utils.py"
+    ]);
+    strict_1.default.ok(messageFile);
+    strict_1.default.deepEqual(messageFile.imports, []);
+});
+(0, node_test_1.default)("resolves individual modules imported from a Python package", async () => {
+    const root = await (0, promises_1.mkdtemp)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "codeforge-python-package-members-"));
+    await (0, promises_1.mkdir)((0, node_path_1.join)(root, "src", "services"), { recursive: true });
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "__init__.py"), "");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "services", "__init__.py"), "");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "services", "helper.py"), "def calculate():\n    return 1\n");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "services", "utils.py"), "def format_value():\n    return 'ok'\n");
+    await (0, promises_1.writeFile)((0, node_path_1.join)(root, "src", "main.py"), [
+        "from src.services import (",
+        "    helper,",
+        "    utils,",
+        ")"
+    ].join("\n"));
+    const snapshot = await (0, indexer_1.indexRepository)(root);
+    const mainFile = snapshot.files.find((file) => file.path === "src/main.py");
+    strict_1.default.ok(mainFile);
+    const resolvedImports = mainFile.resolvedImports ?? [];
+    strict_1.default.ok(resolvedImports.includes("src/services/helper.py"), "expected helper.py to be resolved");
+    strict_1.default.ok(resolvedImports.includes("src/services/utils.py"), "expected utils.py to be resolved");
+});

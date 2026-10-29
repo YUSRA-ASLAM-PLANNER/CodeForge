@@ -1,4 +1,4 @@
-import type { Chapter14EvaluationContext } from "../src/domain/models";
+import type { Chapter14EvaluationContext } from "../packages/evaluation-engine/src/domain/models";
 
 export function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;

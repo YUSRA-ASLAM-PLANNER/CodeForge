@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { runPipeline } from "../src/cli";
+import { runPipeline } from "../packages/evaluation-engine/src/cli";
 import { baseContext, clone, mutable } from "./fixtures";
-import { SchemaValidationError } from "../src/errors";
-import { WalCorruptionError } from "../src/errors";
-import type { Chapter14EvaluationContext } from "../src/domain/models";
+import { SchemaValidationError } from "../packages/evaluation-engine/src/errors";
+import { WalCorruptionError } from "../packages/evaluation-engine/src/errors";
+import type { Chapter14EvaluationContext } from "../packages/evaluation-engine/src/domain/models";
 
 function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "ch14-cli-"));
