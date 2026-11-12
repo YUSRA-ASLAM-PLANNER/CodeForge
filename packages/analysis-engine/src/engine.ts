@@ -10,6 +10,7 @@ import {
 import type { ArtifactReference, Chapter14EvaluationContext } from "@codeforge/evaluation-engine";
 import { analyzeRepositoryPath } from "@codeforge/verification-engine";
 import type { RepositorySnapshot } from "@codeforge/repository-indexer";
+import { AIRemediationEngine, type RemediationPatch } from "@codeforge/ai-remediation";
 import { produceRepositoryEvidence } from "./evidence";
 import type { AnalysisConfiguration, AnalysisPhase, AnalysisResult } from "./types";
 
@@ -49,8 +50,8 @@ function buildArtifacts(
 }
 
 export async function analyzeRepository(
-  configuration: AnalysisConfiguration
-): Promise<AnalysisResult> {
+  configuration: AnalysisConfiguration & { remediate?: boolean }
+): Promise<AnalysisResult & { remediations?: RemediationPatch[] }> {
   const repositoryAnalysis = await analyzeRepositoryPath(
     configuration.repositoryPath,
     configuration.architectureImportBoundaries
@@ -96,6 +97,34 @@ export async function analyzeRepository(
   const newlyPersistedCount = store.persistMany(findings);
   const alreadyPersistedCount = findings.length - newlyPersistedCount;
 
+  const remediations: RemediationPatch[] = [];
+  if (configuration.remediate) {
+    const remediationEngine = new AIRemediationEngine({
+      apiKey: process.env.GEMINI_API_KEY
+    });
+
+    const nonConformingFindings = findings.filter(
+      (f) => String(f.result_state).toUpperCase() === "NON_CONFORMING" || String(f.result_state) === "NONCONFORMING"
+    );
+
+    for (const finding of nonConformingFindings) {
+      const targetFile = finding.target_artifact_id || "unknown";
+      const fileEntry = repositoryAnalysis.snapshot.files.find((f) => f.path === targetFile);
+      const sourceCode = (fileEntry as { content?: string } | undefined)?.content ?? "";
+
+      const patch = await remediationEngine.generateFix(
+        {
+          finding_id: finding.finding_id,
+          rule_id: finding.criterion_id,
+          target: targetFile,
+          message: `Requirement ${finding.requirement_id} violated`
+        },
+        sourceCode
+      );
+      remediations.push(patch);
+    }
+  }
+
   return {
     repository: repositoryAnalysis.snapshot,
     dependencyGraph: repositoryAnalysis.graph,
@@ -108,6 +137,7 @@ export async function analyzeRepository(
       newlyPersistedCount,
       alreadyPersistedCount
     },
-    completedPhases: COMPLETED_PHASES
+    completedPhases: COMPLETED_PHASES,
+    ...(configuration.remediate ? { remediations } : {})
   };
 }
