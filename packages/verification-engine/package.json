@@ -1,15 +1,15 @@
-﻿{
+{
   "name": "@codeforge/verification-engine",
   "version": "0.1.0",
   "private": true,
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
-  "bin": {
-    "forge": "dist/src/cli.js"
-  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && npm run test:build && node --test dist-tests/tests/*.test.js",
     "test:build": "tsc -p tsconfig.tests.json"
+  },
+  "dependencies": {
+    "yaml": "^2.9.1"
   }
 }

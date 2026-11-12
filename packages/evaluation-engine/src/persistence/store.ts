@@ -25,4 +25,9 @@ export class FindingStore {
   persist(finding: ConformanceFinding): boolean {
     return this.wal.appendFindingIdempotent(finding);
   }
+
+  /** Persist a result batch with a single WAL validation and durable flush. */
+  persistMany(findings: readonly ConformanceFinding[]): number {
+    return this.wal.appendFindingsIdempotent(findings);
+  }
 }

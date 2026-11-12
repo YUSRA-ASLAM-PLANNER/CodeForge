@@ -23,5 +23,9 @@ class FindingStore {
     persist(finding) {
         return this.wal.appendFindingIdempotent(finding);
     }
+    /** Persist a result batch with a single WAL validation and durable flush. */
+    persistMany(findings) {
+        return this.wal.appendFindingsIdempotent(findings);
+    }
 }
 exports.FindingStore = FindingStore;

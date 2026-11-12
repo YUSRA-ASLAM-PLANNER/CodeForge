@@ -118,6 +118,32 @@ test("WAL: idempotency — appending the same finding twice does not duplicate",
   assert.equal(wal.load().length, 1);
 });
 
+test("WAL: batch append preserves a valid chain and skips existing findings", () => {
+  const wal = new WriteAheadLog(tempFile());
+  const first = sampleFinding({ finding_id: "1".repeat(64) });
+  const second = sampleFinding({ finding_id: "2".repeat(64) });
+  wal.appendFindingIdempotent(first);
+
+  assert.equal(wal.appendFindingsIdempotent([first, second]), 1);
+  const records = wal.load();
+  assert.deepEqual(records.map((record) => record.sequence_number), [1, 2]);
+  assert.deepEqual(records.map((record) => record.finding.finding_id), [first.finding_id, second.finding_id]);
+  assert.equal(wal.appendFindingsIdempotent([first, second]), 0);
+  assert.equal(wal.load().length, 2);
+});
+
+test("WAL: batch append rejects conflicting duplicate finding IDs", () => {
+  const wal = new WriteAheadLog(tempFile());
+  assert.throws(
+    () => wal.appendFindingsIdempotent([
+      sampleFinding({ finding_id: "1".repeat(64), result_state: "Conforming" }),
+      sampleFinding({ finding_id: "1".repeat(64), result_state: "Non-Conforming" })
+    ]),
+    TamperDetectedError
+  );
+  assert.equal(wal.load().length, 0);
+});
+
 test("WAL: same finding_id with different content raises tamper error", () => {
   const file = tempFile();
   const wal = new WriteAheadLog(file);

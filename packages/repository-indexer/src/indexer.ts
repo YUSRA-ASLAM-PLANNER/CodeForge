@@ -1,10 +1,15 @@
 import { readdir, readFile, stat } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { join, relative, extname, resolve, dirname } from "node:path";
+import ignore from "ignore";
 import ts from "typescript";
-import type { RepositoryFile, RepositorySnapshot } from "./models";
+import { performance } from "node:perf_hooks";
+import type { RepositoryCall, RepositoryFile, RepositorySnapshot, RepositorySymbol, RepositoryImportBinding } from "./models";
 
 const DEFAULT_IGNORED_DIRECTORIES = new Set([
   ".git",
+  ".codeforge",
   "node_modules",
   "dist",
   "dist-tests",
@@ -45,54 +50,154 @@ const RESOLVABLE_EXTENSIONS = [
   ...PYTHON_EXTENSIONS
 ];
 
-function extractTypeScriptImports(
-  source: string,
-  filePath: string
-): string[] {
+export type RepositoryIndexTiming = {
+  fileCount: number;
+  walkMs: number;
+  sourceIoCumulativeMs: number;
+  sourceParseMs: number;
+  pythonAstMs: number;
+  configMs: number;
+  importResolutionMs: number;
+  callResolutionMs: number;
+  totalMs: number;
+};
+
+function extractTypeScriptStructure(source: string, filePath: string): {
+  symbols: RepositorySymbol[];
+  calls: RepositoryCall[];
+  bindings: RepositoryImportBinding[];
+  imports: string[];
+} {
   const extension = extname(filePath);
-
-  const scriptKind =
-    extension === ".tsx" ? ts.ScriptKind.TSX :
-    extension === ".jsx" ? ts.ScriptKind.JSX :
-    [".js", ".mjs", ".cjs"].includes(extension)
-      ? ts.ScriptKind.JS
-      : ts.ScriptKind.TS;
-
-  const sourceFile = ts.createSourceFile(
-    filePath,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKind
-  );
-
+  const scriptKind = extension === ".tsx" ? ts.ScriptKind.TSX
+    : extension === ".jsx" ? ts.ScriptKind.JSX
+      : [".js", ".mjs", ".cjs"].includes(extension) ? ts.ScriptKind.JS
+        : ts.ScriptKind.TS;
+  const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, scriptKind);
+  const symbols = new Map<string, RepositorySymbol>();
+  const owners: Array<{ name: string; node: ts.Node; body: ts.Node }> = [];
+  const bindings: RepositoryImportBinding[] = [];
   const imports = new Set<string>();
 
-  function visit(node: ts.Node): void {
-    if (
-      (ts.isImportDeclaration(node) ||
-        ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      imports.add(node.moduleSpecifier.text);
-    }
-
-    if (
-      ts.isCallExpression(node) &&
-      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
-      node.arguments.length === 1 &&
-      ts.isStringLiteral(node.arguments[0])
-    ) {
-      imports.add(node.arguments[0].text);
-    }
-
-    ts.forEachChild(node, visit);
+  function textName(name: ts.PropertyName | ts.BindingName | undefined): string | undefined {
+    if (!name) return undefined;
+    if (ts.isIdentifier(name) || ts.isPrivateIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text;
+    return undefined;
   }
 
+  function addSymbol(name: string, kind: RepositorySymbol["kind"], node: ts.Node): void {
+    if (!name) return;
+    const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+    symbols.set(`${kind}:${name}`, { name, kind, line });
+  }
+
+  function visit(node: ts.Node, className?: string): void {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)
+    ) imports.add(node.moduleSpecifier.text);
+    if (
+      ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0])
+    ) imports.add(node.arguments[0].text);
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && node.importClause?.namedBindings) {
+      if (ts.isNamespaceImport(node.importClause.namedBindings)) {
+        bindings.push({ localName: node.importClause.namedBindings.name.text, moduleSpecifier: node.moduleSpecifier.text, namespace: true });
+      } else {
+        for (const element of node.importClause.namedBindings.elements) {
+          bindings.push({
+            localName: element.name.text,
+            importedName: (element.propertyName ?? element.name).text,
+            moduleSpecifier: node.moduleSpecifier.text,
+            namespace: false
+          });
+        }
+      }
+    }
+    if (ts.isClassDeclaration(node)) {
+      const name = textName(node.name);
+      if (name) {
+        addSymbol(name, "class", node);
+        for (const member of node.members) {
+          if (ts.isMethodDeclaration(member) || ts.isConstructorDeclaration(member)) {
+            const memberName = ts.isConstructorDeclaration(member) ? "constructor" : textName(member.name);
+            if (!memberName || !member.body) continue;
+            const qualifiedName = `${name}.${memberName}`;
+            addSymbol(qualifiedName, "method", member);
+            owners.push({ name: qualifiedName, node: member, body: member.body });
+          }
+        }
+      }
+      ts.forEachChild(node, (child) => visit(child, name));
+      return;
+    }
+    if (ts.isFunctionDeclaration(node)) {
+      const name = textName(node.name);
+      if (name) {
+        addSymbol(name, "function", node);
+        if (node.body) owners.push({ name, node, body: node.body });
+      }
+    } else if (ts.isInterfaceDeclaration(node)) {
+      if (node.name) addSymbol(node.name.text, "interface", node);
+    } else if (ts.isTypeAliasDeclaration(node)) {
+      addSymbol(node.name.text, "type", node);
+    } else if (ts.isEnumDeclaration(node)) {
+      addSymbol(node.name.text, "enum", node);
+    } else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      const initializer = node.initializer;
+      if (initializer && (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))) {
+        const name = node.name.text;
+        addSymbol(name, "function", node);
+        owners.push({ name, node: initializer, body: initializer.body });
+      } else {
+        addSymbol(node.name.text, "variable", node);
+      }
+    }
+    ts.forEachChild(node, (child) => visit(child, className));
+  }
   visit(sourceFile);
 
-  return [...imports].sort((a, b) => a.localeCompare(b));
+  const calls = new Map<string, RepositoryCall>();
+
+  for (const owner of owners) {
+    function findCalls(node: ts.Node): void {
+      if (node !== owner.node && (ts.isFunctionLike(node) || ts.isClassLike(node))) return;
+      if (ts.isCallExpression(node)) {
+        let callee: string | undefined;
+        let calleeQualifier: string | undefined;
+        if (ts.isIdentifier(node.expression)) callee = node.expression.text;
+        else if (
+          ts.isPropertyAccessExpression(node.expression) &&
+          (node.expression.expression.kind === ts.SyntaxKind.ThisKeyword ||
+            node.expression.expression.kind === ts.SyntaxKind.SuperKeyword ||
+            ts.isIdentifier(node.expression.expression))
+        ) {
+          callee = node.expression.name.text;
+          calleeQualifier = node.expression.expression.getText(sourceFile);
+        }
+        if (callee) {
+          const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+          const call = {
+            caller: owner.name,
+            callee,
+            ...(calleeQualifier ? { calleeQualifier } : {}),
+            line
+          };
+          calls.set(`${call.caller}:${call.calleeQualifier ?? ""}:${call.callee}:${call.line}`, call);
+        }
+      }
+      ts.forEachChild(node, findCalls);
+    }
+    findCalls(owner.body);
+  }
+
+  const compare = (left: string, right: string) => left.localeCompare(right);
+  return {
+    symbols: [...symbols.values()].sort((a, b) => compare(`${a.name}:${a.kind}`, `${b.name}:${b.kind}`)),
+    calls: [...calls.values()].sort((a, b) => compare(`${a.caller}:${a.callee}:${a.line}`, `${b.caller}:${b.callee}:${b.line}`)),
+    bindings: bindings.sort((a, b) => compare(`${a.moduleSpecifier}:${a.localName}`, `${b.moduleSpecifier}:${b.localName}`)),
+    imports: [...imports].sort(compare)
+  };
 }
 
 function stripPythonComments(source: string): string {
@@ -259,16 +364,6 @@ function extractPythonImportedModuleCandidates(
 
   return [...candidates].sort((a, b) => a.localeCompare(b));
 }
-function extractImports(source: string, filePath: string): string[] {
-  const extension = extname(filePath);
-
-  if (extension === ".py" || extension === ".pyi") {
-    return extractPythonImports(source);
-  }
-
-  return extractTypeScriptImports(source, filePath);
-}
-
 function toRepositoryPath(
   rootPath: string,
   absolutePath: string
@@ -376,12 +471,107 @@ function resolvePathAlias(
   return undefined;
 }
 
+type WorkspacePackage = {
+  rootPath: string;
+  sourceEntries: string[];
+};
+
+function resolveWorkspacePackageImport(
+  importSpecifier: string,
+  workspacePackages: Map<string, WorkspacePackage>,
+  knownAbsolutePaths: Map<string, string>
+): string | undefined {
+  const segments = importSpecifier.split("/");
+  const packageName = importSpecifier.startsWith("@")
+    ? segments.slice(0, 2).join("/")
+    : segments[0];
+  const workspacePackage = workspacePackages.get(packageName);
+  if (!workspacePackage) return undefined;
+
+  const packageSegments = packageName.split("/").length;
+  const subpath = segments.slice(packageSegments).join("/");
+  const candidates = subpath
+    ? [subpath]
+    : [
+        ...workspacePackage.sourceEntries,
+        "src/index",
+        "index"
+      ];
+
+  for (const entry of candidates) {
+    const candidatePath = resolve(workspacePackage.rootPath, entry);
+    const direct = findExistingSourcePath(candidatePath, knownAbsolutePaths);
+    if (direct) return direct;
+
+    // Workspace package manifests commonly point at compiled `dist` output.
+    // Resolve that declaration to the corresponding indexed source entry.
+    const normalizedEntry = entry.replace(/\\/g, "/").replace(/^(?:dist|lib|build)\//, "");
+    if (normalizedEntry === entry) continue;
+    const extension = normalizedEntry.endsWith(".d.ts")
+      ? ".d.ts"
+      : extname(normalizedEntry);
+    const stem = extension ? normalizedEntry.slice(0, -extension.length) : normalizedEntry;
+    const sourceExtensions = extension === ".js"
+      ? [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx"]
+      : extension === ".mjs"
+        ? [".mts", ".mjs", ".ts"]
+        : extension === ".cjs"
+          ? [".cts", ".cjs", ".ts"]
+          : extension === ".d.ts"
+            ? [".ts", ".tsx"]
+            : [extension];
+    for (const sourceExtension of sourceExtensions) {
+      const sourcePath = findExistingSourcePath(
+        resolve(workspacePackage.rootPath, `${stem}${sourceExtension}`),
+        knownAbsolutePaths
+      );
+      if (sourcePath) return sourcePath;
+    }
+  }
+
+  return undefined;
+}
+
+async function loadWorkspacePackages(
+  rootPath: string,
+  files: RepositoryFile[],
+  withIo: <T>(operation: () => Promise<T>) => Promise<T>
+): Promise<Map<string, WorkspacePackage>> {
+  const packages = new Map<string, WorkspacePackage>();
+  const manifests = files.filter((file) =>
+    file.path === "package.json" || file.path.endsWith("/package.json")
+  );
+
+  for (const file of manifests) {
+    let manifest: unknown;
+    try {
+      manifest = JSON.parse(await withIo(() =>
+        readFile(resolve(rootPath, file.path), "utf8")
+      ));
+    } catch {
+      continue;
+    }
+    if (typeof manifest !== "object" || manifest === null || Array.isArray(manifest)) continue;
+    const value = manifest as Record<string, unknown>;
+    if (typeof value.name !== "string" || value.name.trim() === "") continue;
+    const sourceEntries = [value.source, value.types, value.typings, value.module, value.main]
+      .filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
+    packages.set(value.name, {
+      rootPath: resolve(rootPath, dirname(file.path)),
+      sourceEntries
+    });
+  }
+
+  return packages;
+}
+
 function resolveImportPath(
   importSpecifier: string,
   importerAbsolutePath: string,
   rootPath: string,
   compilerOptions: ts.CompilerOptions,
-  knownAbsolutePaths: Map<string, string>
+  knownAbsolutePaths: Map<string, string>,
+  workspacePackages: Map<string, WorkspacePackage>
 ): string | undefined {
   const importerExtension = extname(importerAbsolutePath);
 
@@ -427,6 +617,10 @@ function resolveImportPath(
     rootPath,
     compilerOptions,
     knownAbsolutePaths
+  ) ?? resolveWorkspacePackageImport(
+    importSpecifier,
+    workspacePackages,
+    knownAbsolutePaths
   );
 }
 
@@ -465,50 +659,242 @@ async function loadCompilerOptions(
 
 export async function indexRepository(
   rootPath: string,
-  ignoredDirectories: Set<string> = DEFAULT_IGNORED_DIRECTORIES
+  ignoredDirectories: Set<string> = DEFAULT_IGNORED_DIRECTORIES,
+  onTiming?: (timing: RepositoryIndexTiming) => void,
+  additionalIgnorePatterns: string[] = []
 ): Promise<RepositorySnapshot> {
+  const totalStarted = performance.now();
   const absoluteRootPath = resolve(rootPath);
+  let configuredIgnoreMatcher: ReturnType<typeof ignore> | undefined;
+  if (additionalIgnorePatterns.length > 0) {
+    try {
+      configuredIgnoreMatcher = ignore().add(additionalIgnorePatterns);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Invalid configured repository exclusions: ${message}`);
+    }
+  }
   const files: RepositoryFile[] = [];
+  const pythonSources = new Map<string, string>();
+  const analysisWarnings: string[] = [];
+  let sourceIoCumulativeMs = 0;
+  let sourceParseMs = 0;
+  let pythonAstMs = 0;
+  const maxConcurrentIo = 32;
+  let activeIo = 0;
+  const ioWaiters: Array<() => void> = [];
 
-  async function walk(currentPath: string): Promise<void> {
-    const entries = await readdir(currentPath, { withFileTypes: true });
+  async function withIo<T>(operation: () => Promise<T>): Promise<T> {
+    if (activeIo >= maxConcurrentIo) await new Promise<void>((resolveWaiter) => ioWaiters.push(resolveWaiter));
+    activeIo += 1;
+    try {
+      return await operation();
+    } finally {
+      activeIo -= 1;
+      ioWaiters.shift()?.();
+    }
+  }
 
-    for (const entry of entries) {
+  type IgnoreScope = {
+    directory: string;
+    matcher: ReturnType<typeof ignore>;
+  };
+
+  async function loadIgnoreScope(
+    directory: string
+  ): Promise<IgnoreScope | undefined> {
+    const ignorePath = join(directory, ".gitignore");
+    let contents: string;
+
+    try {
+      contents = await withIo(() => readFile(ignorePath, "utf8"));
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "ENOENT"
+      ) {
+        return undefined;
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Unable to read ${ignorePath}: ${message}`);
+    }
+
+    try {
+      return { directory, matcher: ignore().add(contents) };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Invalid ignore rules in ${ignorePath}: ${message}`);
+    }
+  }
+
+  function isIgnored(
+    absolutePath: string,
+    isDirectory: boolean,
+    scopes: IgnoreScope[]
+  ): boolean {
+    let ignored = false;
+
+    for (const scope of scopes) {
+      const scopedPath = relative(scope.directory, absolutePath)
+        .replace(/\\/g, "/");
+
+      if (!scopedPath) continue;
+
+      const pathname = isDirectory ? `${scopedPath}/` : scopedPath;
+      const result = scope.matcher.test(pathname);
+
+      if (result.ignored) ignored = true;
+      else if (result.unignored) ignored = false;
+    }
+
+    return ignored;
+  }
+
+  async function walk(
+    currentPath: string,
+    parentScopes: IgnoreScope[] = []
+  ): Promise<void> {
+    const localScope = await loadIgnoreScope(currentPath);
+    const scopes = localScope
+      ? [...parentScopes, localScope]
+      : parentScopes;
+
+    let entries: Dirent[];
+    try {
+      entries = await withIo(() => readdir(currentPath, { withFileTypes: true }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Unable to read repository directory ${currentPath}: ${message}`);
+    }
+
+    async function processEntry(entry: (typeof entries)[number]): Promise<void> {
       if (entry.isDirectory() && ignoredDirectories.has(entry.name)) {
-        continue;
+        return;
       }
 
       const fullPath = join(currentPath, entry.name);
 
-      if (entry.isDirectory()) {
-        await walk(fullPath);
-        continue;
+      if (isIgnored(fullPath, entry.isDirectory(), scopes)) {
+        return;
       }
 
-      if (!entry.isFile()) continue;
+      if (configuredIgnoreMatcher) {
+        const configuredPath = relative(absoluteRootPath, fullPath).replace(/\\/g, "/");
+        const pathname = entry.isDirectory() ? `${configuredPath}/` : configuredPath;
+        if (configuredIgnoreMatcher.test(pathname).ignored) return;
+      }
 
-      const fileStat = await stat(fullPath);
+      if (entry.isDirectory()) {
+        await walk(fullPath, scopes);
+        return;
+      }
+
+      // Symlinks are intentionally not followed, so indexing cannot leave the
+      // requested repository root or recurse through a link cycle.
+      if (!entry.isFile()) return;
+
       const extension = extname(entry.name);
       const path = toRepositoryPath(absoluteRootPath, fullPath);
-
-      const file: RepositoryFile = {
-        path,
-        extension,
-        sizeBytes: fileStat.size
-      };
-
+      let sizeBytes: number;
+      let source: string | undefined;
       if (SOURCE_EXTENSIONS.has(extension)) {
-        const source = await readFile(fullPath, "utf8");
-        file.imports = extractImports(source, path);
+        let sourceBytes: Buffer;
+        try {
+          sourceBytes = await withIo(async () => {
+            const ioStarted = performance.now();
+            const contents = await readFile(fullPath);
+            sourceIoCumulativeMs += performance.now() - ioStarted;
+            return contents;
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(`Unable to read repository source ${path}: ${message}`);
+        }
+        sizeBytes = sourceBytes.length;
+        source = sourceBytes.toString("utf8");
+      } else {
+        let fileStat;
+        try {
+          fileStat = await withIo(() => stat(fullPath));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(`Unable to inspect repository file ${fullPath}: ${message}`);
+        }
+        sizeBytes = fileStat.size;
+      }
+
+      const file: RepositoryFile = { path, extension, sizeBytes };
+      if (source !== undefined) {
+        const parseStarted = performance.now();
+        if (extension === ".py" || extension === ".pyi") {
+          file.imports = extractPythonImports(source);
+          pythonSources.set(path, source);
+        } else {
+          const structure = extractTypeScriptStructure(source, path);
+          file.imports = structure.imports;
+          file.symbols = structure.symbols;
+          file.calls = structure.calls;
+          file.importBindings = structure.bindings;
+        }
+        sourceParseMs += performance.now() - parseStarted;
       }
 
       files.push(file);
     }
+
+    for (let offset = 0; offset < entries.length; offset += maxConcurrentIo) {
+      await Promise.all(entries.slice(offset, offset + maxConcurrentIo).map(processEntry));
+    }
   }
 
+  const walkStarted = performance.now();
   await walk(absoluteRootPath);
+  const walkMs = performance.now() - walkStarted;
 
   files.sort((a, b) => a.path.localeCompare(b.path));
+
+  if (pythonSources.size > 0) {
+    const pythonAstStarted = performance.now();
+    const workerPath = resolve(__dirname, "../../src/pythonAstWorker.py");
+    let parsed: SpawnSyncReturns<string> | undefined;
+    for (const executable of ["python", "python3"]) {
+      parsed = spawnSync(executable, [workerPath], {
+        input: JSON.stringify(Object.fromEntries(pythonSources)),
+        encoding: "utf8",
+        timeout: 15000,
+        maxBuffer: 64 * 1024 * 1024
+      });
+      if (!parsed.error || (parsed.error as NodeJS.ErrnoException).code !== "ENOENT") break;
+    }
+
+    if (!parsed || parsed.error || parsed.status !== 0) {
+      const detail = parsed?.error?.message ?? parsed?.stderr?.trim() ?? "Python interpreter is unavailable";
+      analysisWarnings.push(`Python symbol analysis was skipped: ${detail}`);
+    } else {
+      try {
+        const result = JSON.parse(parsed.stdout) as Record<string, {
+          symbols: RepositorySymbol[];
+          calls: RepositoryCall[];
+          bindings: RepositoryImportBinding[];
+          warning?: string;
+        }>;
+        for (const file of files) {
+          const output = result[file.path];
+          if (!output) continue;
+          file.symbols = output.symbols;
+          file.calls = output.calls;
+          file.importBindings = output.bindings;
+          if (output.warning) analysisWarnings.push(output.warning);
+        }
+      } catch (error) {
+        analysisWarnings.push(`Python symbol analysis returned invalid output: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    pythonAstMs = performance.now() - pythonAstStarted;
+  }
 
   const knownAbsolutePaths = new Map<string, string>();
 
@@ -521,8 +907,15 @@ export async function indexRepository(
     );
   }
 
+  const configStarted = performance.now();
   const compilerOptions = await loadCompilerOptions(absoluteRootPath);
-
+  const workspacePackages = await loadWorkspacePackages(
+    absoluteRootPath,
+    files,
+    withIo
+  );
+  const configMs = performance.now() - configStarted;
+  const importResolutionStarted = performance.now();
   for (const file of files) {
     if (!file.imports?.length || !SOURCE_EXTENSIONS.has(file.extension)) {
       continue;
@@ -537,7 +930,8 @@ export async function indexRepository(
           importerAbsolutePath,
           absoluteRootPath,
           compilerOptions,
-          knownAbsolutePaths
+          knownAbsolutePaths,
+          workspacePackages
         )
       )
       .filter((path): path is string => Boolean(path));
@@ -555,7 +949,8 @@ export async function indexRepository(
               importerAbsolutePath,
               absoluteRootPath,
               compilerOptions,
-              knownAbsolutePaths
+              knownAbsolutePaths,
+              workspacePackages
             )
           )
           .filter((path): path is string => Boolean(path));
@@ -568,11 +963,72 @@ export async function indexRepository(
       ])
     ].sort((a, b) => a.localeCompare(b));
   }
+  const importResolutionMs = performance.now() - importResolutionStarted;
+
+  const callResolutionStarted = performance.now();
+  const symbolNamesByPath = new Map(files.map((file) => [
+    file.path,
+    new Set((file.symbols ?? []).map((symbol) => symbol.name))
+  ]));
+  for (const file of files) {
+    const absolutePath = resolve(absoluteRootPath, file.path);
+    const localSymbols = symbolNamesByPath.get(file.path)!;
+    const bindingTargets = new Map<string, { path: string; symbolName: string }>();
+    for (const binding of file.importBindings ?? []) {
+      const moduleCandidates = binding.namespace || !binding.importedName
+        ? [binding.moduleSpecifier]
+        : [`${binding.moduleSpecifier}${binding.moduleSpecifier.endsWith(".") ? "" : "."}${binding.importedName}`, binding.moduleSpecifier];
+      const targetSymbolName = binding.importedName;
+      for (const specifier of moduleCandidates) {
+        const targetPath = resolveImportPath(
+          specifier,
+          absolutePath,
+          absoluteRootPath,
+          compilerOptions,
+          knownAbsolutePaths,
+          workspacePackages
+        );
+        if (!targetPath) continue;
+        if (!binding.namespace && !symbolNamesByPath.get(targetPath)?.has(targetSymbolName!)) continue;
+        bindingTargets.set(`${binding.namespace ? "namespace" : "named"}:${binding.localName}`, {
+          path: targetPath,
+          symbolName: binding.namespace ? "" : targetSymbolName ?? ""
+        });
+        break;
+      }
+    }
+    for (const call of file.calls ?? []) {
+      if (call.calleeQualifier === "self" || call.calleeQualifier === "super" || call.calleeQualifier === "this") continue;
+      if (!call.calleeQualifier && localSymbols.has(call.callee)) continue;
+      const target = call.calleeQualifier
+        ? bindingTargets.get(`namespace:${call.calleeQualifier}`)
+        : bindingTargets.get(`named:${call.callee}`);
+      if (!target) continue;
+      const targetSymbolName = target.symbolName || call.callee;
+      if (!target.symbolName && !symbolNamesByPath.get(target.path)?.has(targetSymbolName)) continue;
+      call.callee = targetSymbolName;
+      call.calleePath = target.path;
+    }
+  }
+  const callResolutionMs = performance.now() - callResolutionStarted;
+
+  onTiming?.({
+    fileCount: files.length,
+    walkMs,
+    sourceIoCumulativeMs,
+    sourceParseMs,
+    pythonAstMs,
+    configMs,
+    importResolutionMs,
+    callResolutionMs,
+    totalMs: performance.now() - totalStarted
+  });
 
   return {
     rootPath,
     files,
     fileCount: files.length,
-    totalBytes: files.reduce((sum, file) => sum + file.sizeBytes, 0)
+    totalBytes: files.reduce((sum, file) => sum + file.sizeBytes, 0),
+    ...(analysisWarnings.length > 0 ? { analysisWarnings } : {})
   };
 }

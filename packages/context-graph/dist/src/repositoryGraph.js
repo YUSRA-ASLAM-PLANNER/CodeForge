@@ -117,6 +117,32 @@ function buildContextGraph(files) {
             graph.addEdge(`directory:${parentDirectory}`, id, "contains");
         }
     }
+    const symbolIdsByFileAndName = new Map();
+    for (const file of files) {
+        for (const symbol of file.symbols ?? []) {
+            const id = `symbol:${file.path}#${encodeURIComponent(symbol.name)}`;
+            symbolIdsByFileAndName.set(`${file.path}|${symbol.name}`, id);
+            graph.addNode(id, "symbol", symbol.name, file.path);
+            graph.addEdge(`file:${file.path}`, id, "references");
+        }
+    }
+    for (const file of files) {
+        for (const call of file.calls ?? []) {
+            if (call.calleeQualifier && call.calleeQualifier !== "self" && call.calleeQualifier !== "super" && call.calleeQualifier !== "this" && !call.calleePath)
+                continue;
+            const callerId = symbolIdsByFileAndName.get(`${file.path}|${call.caller}`);
+            const className = call.caller.includes(".")
+                ? call.caller.slice(0, call.caller.lastIndexOf("."))
+                : undefined;
+            const calleePath = call.calleePath ?? file.path;
+            const calleeId = (className
+                ? symbolIdsByFileAndName.get(`${calleePath}|${className}.${call.callee}`)
+                : undefined) ?? symbolIdsByFileAndName.get(`${calleePath}|${call.callee}`);
+            if (callerId && calleeId && callerId !== calleeId) {
+                graph.addEdge(callerId, calleeId, "references");
+            }
+        }
+    }
     const knownPaths = new Set(files.map((file) => file.path));
     const importEdges = new Set();
     for (const file of files) {

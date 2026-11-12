@@ -1,0 +1,66 @@
+name: CodeForge repository analysis
+description: Verify a repository or analyze it against a Chapter 14 specification.
+
+inputs:
+  repository-path:
+    description: Repository directory, absolute or relative to the workflow workspace.
+    required: false
+    default: .
+  spec:
+    description: Optional Chapter 14 specification JSON path, relative to the workflow workspace.
+    required: false
+    default: ""
+  format:
+    description: CLI output format (text or json).
+    required: false
+    default: text
+  node-version:
+    description: Node.js version used to build CodeForge.
+    required: false
+    default: "24"
+  python-version:
+    description: Python version used for Python AST analysis.
+    required: false
+    default: "3.12"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install CodeForge dependencies
+      run: npm ci
+      shell: bash
+      working-directory: ${{ github.action_path }}
+
+    - name: Build CodeForge
+      run: npm run build
+      shell: bash
+      working-directory: ${{ github.action_path }}
+
+    - name: Verify repository
+      if: ${{ inputs.spec == '' }}
+      run: node "$GITHUB_ACTION_PATH/packages/analysis-engine/dist/src/cli.js" verify "$CODEFORGE_REPOSITORY_PATH" --format "$CODEFORGE_FORMAT"
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        CODEFORGE_REPOSITORY_PATH: ${{ inputs.repository-path }}
+        CODEFORGE_FORMAT: ${{ inputs.format }}
+
+    - name: Analyze repository
+      if: ${{ inputs.spec != '' }}
+      run: node "$GITHUB_ACTION_PATH/packages/analysis-engine/dist/src/cli.js" analyze "$CODEFORGE_REPOSITORY_PATH" --spec "$CODEFORGE_SPEC" --wal "$RUNNER_TEMP/codeforge-findings.wal.jsonl" --format "$CODEFORGE_FORMAT"
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        CODEFORGE_REPOSITORY_PATH: ${{ inputs.repository-path }}
+        CODEFORGE_SPEC: ${{ inputs.spec }}
+        CODEFORGE_FORMAT: ${{ inputs.format }}

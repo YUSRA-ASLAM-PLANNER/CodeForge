@@ -1,0 +1,35 @@
+{
+  "requirements": [
+    {
+      "requirement_id": "REQ-ARCH-001",
+      "title": "Repository architecture checks pass",
+      "constraint_level": "Foundational"
+    }
+  ],
+  "criteria": [
+    {
+      "criterion_id": "CRIT-ARCH-001",
+      "requirement_id": "REQ-ARCH-001",
+      "definition": "The repository has no architectural verification violations.",
+      "structured_predicate": {
+        "type": "ATTRIBUTE_EQUALS",
+        "evidence_class": "Structural",
+        "attribute": "verification_passed",
+        "expected": true
+      },
+      "applicability": {
+        "artifact_ids": ["repository:root"]
+      }
+    }
+  ],
+  "evidence_requirements": [
+    {
+      "evidence_requirement_id": "ER-ARCH-001",
+      "criterion_id": "CRIT-ARCH-001",
+      "evidence_class": "Structural",
+      "sufficiency_conditions": [
+        { "type": "MIN_COUNT", "evidence_class": "Structural", "min_count": 1 }
+      ]
+    }
+  ]
+}

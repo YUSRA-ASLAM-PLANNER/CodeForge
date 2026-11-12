@@ -1,4 +1,5 @@
 node_modules/
+.codeforge/
 
 # Generated build output
 packages/*/dist/

@@ -54,6 +54,29 @@ test("creates import edges between internal repository files", () => {
   );
 });
 
+test("adds symbol nodes and call references to the repository graph", () => {
+  const graph = buildContextGraph([
+    {
+      path: "src/service.ts",
+      symbols: [
+        { name: "Service", kind: "class", line: 1 },
+        { name: "Service.run", kind: "method", line: 2 },
+        { name: "helper", kind: "function", line: 5 }
+      ],
+      calls: [
+        { caller: "Service.run", callee: "helper", line: 3 },
+        { caller: "Service.run", callee: "shared", calleePath: "src/shared.ts", line: 4 }
+      ]
+    },
+    { path: "src/shared.ts", symbols: [{ name: "shared", kind: "function", line: 1 }] }
+  ]);
+
+  assert.ok(graph.nodes.some((node) => node.id === "symbol:src/service.ts#Service" && node.kind === "symbol"));
+  assert.ok(graph.edges.some((edge) => edge.from === "file:src/service.ts" && edge.to === "symbol:src/service.ts#Service.run" && edge.kind === "references"));
+  assert.ok(graph.edges.some((edge) => edge.from === "symbol:src/service.ts#Service.run" && edge.to === "symbol:src/service.ts#helper" && edge.kind === "references"));
+  assert.ok(graph.edges.some((edge) => edge.from === "symbol:src/service.ts#Service.run" && edge.to === "symbol:src/shared.ts#shared" && edge.kind === "references"));
+});
+
 test("creates import edges from resolved alias paths", () => {
   const graph = buildContextGraph([
     {

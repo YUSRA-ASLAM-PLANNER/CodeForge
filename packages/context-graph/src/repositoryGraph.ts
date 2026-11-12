@@ -2,13 +2,17 @@
 import { ContextGraphBuilder } from "./builder";
 import type { ContextGraph } from "./models";
 import type {
+  RepositoryCall,
   RepositoryFile,
+  RepositorySymbol,
   RepositorySnapshot
 } from "@codeforge/repository-indexer";
 
 type GraphFile = Pick<RepositoryFile, "path"> & {
   imports?: string[];
   resolvedImports?: string[];
+  symbols?: RepositorySymbol[];
+  calls?: RepositoryCall[];
 };
 
 const RESOLVABLE_EXTENSIONS = [
@@ -166,6 +170,33 @@ export function buildContextGraph(files: GraphFile[]): ContextGraph {
     } else {
       const parentDirectory = file.path.slice(0, lastSlash);
       graph.addEdge(`directory:${parentDirectory}`, id, "contains");
+    }
+  }
+
+  const symbolIdsByFileAndName = new Map<string, string>();
+  for (const file of files) {
+    for (const symbol of file.symbols ?? []) {
+      const id = `symbol:${file.path}#${encodeURIComponent(symbol.name)}`;
+      symbolIdsByFileAndName.set(`${file.path}|${symbol.name}`, id);
+      graph.addNode(id, "symbol", symbol.name, file.path);
+      graph.addEdge(`file:${file.path}`, id, "references");
+    }
+  }
+
+  for (const file of files) {
+    for (const call of file.calls ?? []) {
+      if (call.calleeQualifier && call.calleeQualifier !== "self" && call.calleeQualifier !== "super" && call.calleeQualifier !== "this" && !call.calleePath) continue;
+      const callerId = symbolIdsByFileAndName.get(`${file.path}|${call.caller}`);
+      const className = call.caller.includes(".")
+        ? call.caller.slice(0, call.caller.lastIndexOf("."))
+        : undefined;
+      const calleePath = call.calleePath ?? file.path;
+      const calleeId = (className
+        ? symbolIdsByFileAndName.get(`${calleePath}|${className}.${call.callee}`)
+        : undefined) ?? symbolIdsByFileAndName.get(`${calleePath}|${call.callee}`);
+      if (callerId && calleeId && callerId !== calleeId) {
+        graph.addEdge(callerId, calleeId, "references");
+      }
     }
   }
 

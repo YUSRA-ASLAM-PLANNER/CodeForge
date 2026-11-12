@@ -125,6 +125,26 @@ function sampleFinding(overrides = {}) {
     strict_1.default.equal(second, false);
     strict_1.default.equal(wal.load().length, 1);
 });
+(0, node_test_1.test)("WAL: batch append preserves a valid chain and skips existing findings", () => {
+    const wal = new wal_1.WriteAheadLog(tempFile());
+    const first = sampleFinding({ finding_id: "1".repeat(64) });
+    const second = sampleFinding({ finding_id: "2".repeat(64) });
+    wal.appendFindingIdempotent(first);
+    strict_1.default.equal(wal.appendFindingsIdempotent([first, second]), 1);
+    const records = wal.load();
+    strict_1.default.deepEqual(records.map((record) => record.sequence_number), [1, 2]);
+    strict_1.default.deepEqual(records.map((record) => record.finding.finding_id), [first.finding_id, second.finding_id]);
+    strict_1.default.equal(wal.appendFindingsIdempotent([first, second]), 0);
+    strict_1.default.equal(wal.load().length, 2);
+});
+(0, node_test_1.test)("WAL: batch append rejects conflicting duplicate finding IDs", () => {
+    const wal = new wal_1.WriteAheadLog(tempFile());
+    strict_1.default.throws(() => wal.appendFindingsIdempotent([
+        sampleFinding({ finding_id: "1".repeat(64), result_state: "Conforming" }),
+        sampleFinding({ finding_id: "1".repeat(64), result_state: "Non-Conforming" })
+    ]), errors_1.TamperDetectedError);
+    strict_1.default.equal(wal.load().length, 0);
+});
 (0, node_test_1.test)("WAL: same finding_id with different content raises tamper error", () => {
     const file = tempFile();
     const wal = new wal_1.WriteAheadLog(file);

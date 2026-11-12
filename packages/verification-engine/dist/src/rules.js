@@ -1,6 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.circularDependencyDetectionRule026 = exports.importBoundaryEnforcementRule024 = exports.internalImportsMustResolveRule023 = exports.containsEdgesMustMatchPathsRule022 = exports.directoryNodesMustMatchRepositoryStructureRule = exports.fileNodesMustMatchRepositoryFilesRule = exports.containsEdgesMustMatchPathsRule = exports.containsEdgesMustPointParentToChildRule = exports.fileNodesRequireParentRule = exports.directoryNodesRequireParentRule = exports.directoryNodesRequireValidPathsRule = exports.repositoryContainsAllTopLevelFilesRule = exports.orphanNodeRule = exports.duplicateEdgesRule = exports.selfReferentialEdgeRule = exports.repositoryNodeMustBeRootRule = exports.repositoryNodeIdRule = exports.repositoryNodeRequiredRule = exports.validContextGraphEdgeKindsRule = exports.fileNodesRequireValidPathsRule = exports.duplicateNodeIdsRule = exports.duplicateFileNodesRule = exports.contextGraphFilesExistInRepositoryRule = exports.indexedFilesExistInContextGraphRule = exports.contextGraphReferentialIntegrityRule = void 0;
+function graphNodesById(context) {
+    return new Map(context.graph.nodes.map((node) => [node.id, node]));
+}
+function containsEdgeKeys(context) {
+    return new Set(context.graph.edges
+        .filter((edge) => edge.kind === "contains")
+        .map((edge) => `${edge.from}|${edge.to}`));
+}
 exports.contextGraphReferentialIntegrityRule = {
     id: "ARCH-001",
     description: "All context graph edges must reference existing nodes",
@@ -358,6 +366,7 @@ exports.directoryNodesRequireParentRule = {
     severity: "error",
     check: (context) => {
         const violations = [];
+        const parentEdges = containsEdgeKeys(context);
         for (const node of context.graph.nodes) {
             if (node.kind !== "directory") {
                 continue;
@@ -368,9 +377,7 @@ exports.directoryNodesRequireParentRule = {
             const expectedParentId = parentPath
                 ? `directory:${parentPath}`
                 : "repository:root";
-            const hasParentEdge = context.graph.edges.some((edge) => edge.from === expectedParentId &&
-                edge.to === node.id &&
-                edge.kind === "contains");
+            const hasParentEdge = parentEdges.has(`${expectedParentId}|${node.id}`);
             if (!hasParentEdge) {
                 violations.push({
                     ruleId: "ARCH-016",
@@ -389,6 +396,7 @@ exports.fileNodesRequireParentRule = {
     severity: "error",
     check: (context) => {
         const violations = [];
+        const parentEdges = containsEdgeKeys(context);
         for (const node of context.graph.nodes) {
             if (node.kind !== "file") {
                 continue;
@@ -401,9 +409,7 @@ exports.fileNodesRequireParentRule = {
             const expectedParentId = lastSlash === -1
                 ? "repository:root"
                 : `directory:${filePath.slice(0, lastSlash)}`;
-            const hasParentEdge = context.graph.edges.some((edge) => edge.from === expectedParentId &&
-                edge.to === node.id &&
-                edge.kind === "contains");
+            const hasParentEdge = parentEdges.has(`${expectedParentId}|${node.id}`);
             if (!hasParentEdge) {
                 violations.push({
                     ruleId: "ARCH-017",
@@ -422,12 +428,13 @@ exports.containsEdgesMustPointParentToChildRule = {
     severity: "error",
     check: (context) => {
         const violations = [];
+        const nodesById = graphNodesById(context);
         for (const edge of context.graph.edges) {
             if (edge.kind !== "contains") {
                 continue;
             }
-            const fromNode = context.graph.nodes.find((node) => node.id === edge.from);
-            const toNode = context.graph.nodes.find((node) => node.id === edge.to);
+            const fromNode = nodesById.get(edge.from);
+            const toNode = nodesById.get(edge.to);
             if (!fromNode || !toNode) {
                 continue;
             }
@@ -453,12 +460,13 @@ exports.containsEdgesMustMatchPathsRule = {
     severity: "error",
     check: (context) => {
         const violations = [];
+        const nodesById = graphNodesById(context);
         for (const edge of context.graph.edges) {
             if (edge.kind !== "contains") {
                 continue;
             }
-            const fromNode = context.graph.nodes.find((node) => node.id === edge.from);
-            const toNode = context.graph.nodes.find((node) => node.id === edge.to);
+            const fromNode = nodesById.get(edge.from);
+            const toNode = nodesById.get(edge.to);
             if (!fromNode || !toNode) {
                 continue;
             }
@@ -558,12 +566,13 @@ exports.containsEdgesMustMatchPathsRule022 = {
     severity: "error",
     check: (context) => {
         const violations = [];
+        const nodesById = graphNodesById(context);
         for (const edge of context.graph.edges) {
             if (edge.kind !== "contains") {
                 continue;
             }
-            const fromNode = context.graph.nodes.find((node) => node.id === edge.from);
-            const toNode = context.graph.nodes.find((node) => node.id === edge.to);
+            const fromNode = nodesById.get(edge.from);
+            const toNode = nodesById.get(edge.to);
             if (!fromNode || !toNode) {
                 continue;
             }
@@ -615,26 +624,49 @@ exports.internalImportsMustResolveRule023 = {
                 if (!specifier.startsWith(".")) {
                     continue;
                 }
-                const parts = normalize(entry.path).split("/");
-                parts.pop();
+                const isPythonFile = /\.(py|pyi)$/i.test(entry.path);
+                let basePath;
                 let escapesRoot = false;
-                for (const part of specifier.replace(/\\/g, "/").split("/")) {
-                    if (!part || part === ".")
-                        continue;
-                    if (part === "..") {
+                if (isPythonFile) {
+                    const relativeImport = specifier.replace(/\\/g, "/");
+                    const leadingDots = relativeImport.match(/^\.+/)?.[0].length ?? 0;
+                    const moduleName = relativeImport.slice(leadingDots);
+                    const parts = normalize(entry.path).split("/");
+                    parts.pop();
+                    for (let level = 1; level < leadingDots; level++) {
                         if (parts.length === 0) {
                             escapesRoot = true;
                             break;
                         }
                         parts.pop();
                     }
-                    else {
-                        parts.push(part);
+                    for (const part of moduleName.split(".")) {
+                        if (part)
+                            parts.push(part);
                     }
+                    basePath = parts.join("/");
+                }
+                else {
+                    const parts = normalize(entry.path).split("/");
+                    parts.pop();
+                    for (const part of specifier.replace(/\\/g, "/").split("/")) {
+                        if (!part || part === ".")
+                            continue;
+                        if (part === "..") {
+                            if (parts.length === 0) {
+                                escapesRoot = true;
+                                break;
+                            }
+                            parts.pop();
+                        }
+                        else {
+                            parts.push(part);
+                        }
+                    }
+                    basePath = parts.join("/");
                 }
                 if (escapesRoot)
                     continue;
-                const basePath = parts.join("/");
                 const candidates = [
                     basePath,
                     `${basePath}.ts`,
@@ -645,10 +677,22 @@ exports.internalImportsMustResolveRule023 = {
                     `${basePath}.cts`,
                     `${basePath}.mjs`,
                     `${basePath}.cjs`,
+                    `${basePath}.d.ts`,
+                    `${basePath}.py`,
+                    `${basePath}.pyi`,
                     `${basePath}/index.ts`,
                     `${basePath}/index.tsx`,
                     `${basePath}/index.js`,
-                    `${basePath}/index.jsx`
+                    `${basePath}/index.jsx`,
+                    `${basePath}/index.mts`,
+                    `${basePath}/index.cts`,
+                    `${basePath}/index.mjs`,
+                    `${basePath}/index.cjs`,
+                    `${basePath}/index.d.ts`,
+                    `${basePath}/index.py`,
+                    `${basePath}/index.pyi`,
+                    `${basePath}/__init__.py`,
+                    `${basePath}/__init__.pyi`
                 ].map(normalize);
                 if (candidates.some((candidate) => graphFilePaths.has(candidate))) {
                     continue;

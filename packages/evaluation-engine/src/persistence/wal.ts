@@ -169,11 +169,71 @@ export class WriteAheadLog {
     return true;
   }
 
+  /**
+   * Append many findings after one verified WAL load and one durable flush.
+   * Hashes and sequence numbers remain chained in input order; identical
+   * existing findings are skipped and conflicting IDs are rejected.
+   */
+  appendFindingsIdempotent(findings: readonly ConformanceFinding[]): number {
+    if (findings.length === 0) return 0;
+
+    const existingRecords = this.load();
+    const knownFindings = new Map(
+      existingRecords.map((record) => [record.finding.finding_id, record.finding])
+    );
+    let lastRecord = existingRecords[existingRecords.length - 1];
+    let previousHash = lastRecord?.record_hash ?? GENESIS_HASH;
+    let sequenceNumber = lastRecord ? lastRecord.sequence_number + 1 : 1;
+    const newRecords: WalLogRecord[] = [];
+
+    for (const finding of findings) {
+      const existing = knownFindings.get(finding.finding_id);
+      if (existing !== undefined) {
+        const existingSerialized = canonicalJsonStringify(existing as unknown as JsonValue);
+        const incomingSerialized = canonicalJsonStringify(finding as unknown as JsonValue);
+        if (existingSerialized !== incomingSerialized) {
+          throw new TamperDetectedError(
+            `Finding '${finding.finding_id}' already exists in the WAL with different content.`
+          );
+        }
+        continue;
+      }
+
+      const recordHash = computeRecordHash(sequenceNumber, previousHash, finding);
+      const record: WalLogRecord = {
+        sequence_number: sequenceNumber,
+        previous_hash: previousHash,
+        record_hash: recordHash,
+        finding,
+      };
+      newRecords.push(record);
+      knownFindings.set(finding.finding_id, finding);
+      previousHash = recordHash;
+      sequenceNumber += 1;
+    }
+
+    this.appendRecordsDurably(newRecords);
+    return newRecords.length;
+  }
+
   private appendRecordDurably(record: WalLogRecord): void {
     const line = JSON.stringify(record) + "\n";
     const fd = fs.openSync(this.filePath, "a");
     try {
       fs.writeSync(fd, line, null, "utf8");
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
+
+  private appendRecordsDurably(records: readonly WalLogRecord[]): void {
+    if (records.length === 0) return;
+    const fd = fs.openSync(this.filePath, "a");
+    try {
+      for (const record of records) {
+        fs.writeSync(fd, JSON.stringify(record) + "\n", null, "utf8");
+      }
       fs.fsyncSync(fd);
     } finally {
       fs.closeSync(fd);

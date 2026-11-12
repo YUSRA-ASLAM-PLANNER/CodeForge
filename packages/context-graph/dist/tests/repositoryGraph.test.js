@@ -38,6 +38,27 @@ const repositoryGraph_1 = require("../src/repositoryGraph");
         edge.to.includes("express") &&
         edge.kind === "imports"));
 });
+(0, node_test_1.default)("adds symbol nodes and call references to the repository graph", () => {
+    const graph = (0, repositoryGraph_1.buildContextGraph)([
+        {
+            path: "src/service.ts",
+            symbols: [
+                { name: "Service", kind: "class", line: 1 },
+                { name: "Service.run", kind: "method", line: 2 },
+                { name: "helper", kind: "function", line: 5 }
+            ],
+            calls: [
+                { caller: "Service.run", callee: "helper", line: 3 },
+                { caller: "Service.run", callee: "shared", calleePath: "src/shared.ts", line: 4 }
+            ]
+        },
+        { path: "src/shared.ts", symbols: [{ name: "shared", kind: "function", line: 1 }] }
+    ]);
+    strict_1.default.ok(graph.nodes.some((node) => node.id === "symbol:src/service.ts#Service" && node.kind === "symbol"));
+    strict_1.default.ok(graph.edges.some((edge) => edge.from === "file:src/service.ts" && edge.to === "symbol:src/service.ts#Service.run" && edge.kind === "references"));
+    strict_1.default.ok(graph.edges.some((edge) => edge.from === "symbol:src/service.ts#Service.run" && edge.to === "symbol:src/service.ts#helper" && edge.kind === "references"));
+    strict_1.default.ok(graph.edges.some((edge) => edge.from === "symbol:src/service.ts#Service.run" && edge.to === "symbol:src/shared.ts#shared" && edge.kind === "references"));
+});
 (0, node_test_1.default)("creates import edges from resolved alias paths", () => {
     const graph = (0, repositoryGraph_1.buildContextGraph)([
         {

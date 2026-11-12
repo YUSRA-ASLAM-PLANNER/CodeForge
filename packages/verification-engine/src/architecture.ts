@@ -27,22 +27,25 @@ const DEFAULT_FORBIDDEN_BOUNDARIES: DetectedArchitectureBoundary[] = [
 ];
 
 export function detectArchitectureLayers(
-  files: string[]
+  files: string[],
+  additionalLayerNames: readonly string[] = []
 ): DetectedArchitectureLayer[] {
   const layers = new Map<string, string[]>();
+  const recognizedLayerNames = new Set([
+    ...DEFAULT_FORBIDDEN_BOUNDARIES.flatMap(({ from, to }) => [from, to]),
+    ...additionalLayerNames.map((name) => name.toLowerCase())
+  ]);
 
   for (const filePath of files) {
     const normalized = normalizePath(filePath);
     const parts = normalized.split("/").filter(Boolean);
-    const srcIndex = parts.indexOf("src");
+    const srcIndexes = parts.flatMap((part, index) => part === "src" ? [index] : []);
+    const layerName = srcIndexes
+      .filter((srcIndex) => srcIndex + 1 < parts.length - 1)
+      .map((srcIndex) => parts[srcIndex + 1]!.toLowerCase())
+      .find((name) => recognizedLayerNames.has(name));
+    if (!layerName) continue;
 
-    // Detect the first directory beneath src/.
-    // Ignore files directly inside src/.
-    if (srcIndex === -1 || srcIndex + 1 >= parts.length - 1) {
-      continue;
-    }
-
-    const layerName = parts[srcIndex + 1].toLowerCase();
     const existingFiles = layers.get(layerName) ?? [];
 
     existingFiles.push(normalized);
