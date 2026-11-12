@@ -9,6 +9,7 @@
     "test": "npm run build && node --test dist/tests/*.test.js"
   },
   "dependencies": {
-    "@codeforge/repository-indexer": "0.1.0"
+    "@codeforge/repository-indexer": "0.1.0",
+    "ajv": "^8.20.0"
   }
 }

@@ -4,7 +4,9 @@
   "private": true,
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
-  "bin": { "forge": "dist/src/cli.js" },
+  "bin": {
+    "forge": "dist/src/cli.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && npm run test:build && node --test dist-tests/tests/*.test.js",
@@ -14,6 +16,7 @@
     "@codeforge/context-graph": "0.1.0",
     "@codeforge/evaluation-engine": "0.1.0",
     "@codeforge/repository-indexer": "0.1.0",
-    "@codeforge/verification-engine": "0.1.0"
+    "@codeforge/verification-engine": "0.1.0",
+    "ajv": "^8.20.0"
   }
 }
