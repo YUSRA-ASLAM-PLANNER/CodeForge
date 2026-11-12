@@ -13,6 +13,7 @@
     "test:build": "tsc -p tsconfig.tests.json"
   },
   "dependencies": {
+    "@codeforge/ai-remediation": "^0.1.0",
     "@codeforge/context-graph": "0.1.0",
     "@codeforge/evaluation-engine": "0.1.0",
     "@codeforge/repository-indexer": "0.1.0",
