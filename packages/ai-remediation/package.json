@@ -1,0 +1,18 @@
+{
+  "name": "@codeforge/ai-remediation",
+  "version": "0.1.0",
+  "description": "AI-assisted architectural remediation engine for CodeForge",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/tests/*.test.js"
+  },
+  "dependencies": {
+    "@codeforge/verification-engine": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
